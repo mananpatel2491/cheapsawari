@@ -64,16 +64,13 @@ This script automates the creation and cleanup of your project's `CHANGELOG.md`.
 
 #### How to Use It:
 1. **Prepare your environment:** Ensure you have your Gemini API key configured in your terminal:
-   ```bash
-   export GEMINI_API_KEY="your-api-key-here"
-   ```
 2. **Run the script:** Navigate to your project root and execute the script via python:
    ```bash
-   python pathway/to/skills/optimize_changelog.py --range HEAD~10..HEAD --output CHANGELOG.md
+   python ./scripts/optimize_changelog.py --dry-run
    ```
    * *Parameters:*
-     * `--range`: Specifies the git commit range to analyze (e.g., the last 10 commits, or between tags like `v1.0.0..v1.1.0`).
-     * `--output`: The file where the optimized markdown changelog will be saved or appended.
+     * `--model`: (Optional) Specify a specific Gemini model ID.
+     * `--dry-run`: (Optional) Preview the optimized table without writing changes.
 
 3. **Review Changes:** The script will leverage Gemini to output a clean markdown structure containing:
    * 🚀 **Features**
@@ -89,15 +86,14 @@ This script is a static analysis and structural validation tool. It ensures your
 1. **Define your rules:** Ensure you have a configuration file (usually `structure_rules.json` or `.fleetrules`) in your repository root that defines your expected directory layout.
 2. **Run the verification script:**
    ```bash
-   python pathway/to/skills/verify_structure.py --config .fleetrules --fix
+   python ./scripts/verify_structure.py
    ```
    * *Parameters:*
-     * `--config`: Points to your structural rules configuration file.
-     * `--fix`: *(Optional)* Instructs the script to use Gemini to automatically generate missing boilerplate files or move misplaced files into their correct directories.
+     * `--dry-run`: Included for fleet consistency; provides a read-only verification.
 
 3. **Interpret the Output:**
    * **Success:** If your codebase matches the expected architecture, the script exits with code `0`.
-   * **Failure:** It outputs a list of structural violations (e.g., `Missing unit test for src/auth/login.py`). If the `--fix` flag was used, Gemini will automatically draft the missing structure for you.
+   * **Failure:** It outputs a list of structural violations (files present on disk but missing from the architecture map).
 
 ---
 *Last updated via scripts/update_getting_started.py*
