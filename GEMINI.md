@@ -21,6 +21,8 @@ The Five Core Lessons
 4. Continuous API Validation (Bruno)
 - Rule: No backend API feature is complete until the Bruno pipeline is updated [790, conversation history].
 - Documentation: Maintain an .md file in the Bruno folder that generates a visual HTML flow of the tests [790, conversation history].
+- Gated Commits: Successful Bruno execution is required for all commits.
+- Exceptions: Requires the exact string: "I understand bruno validation is failing and I allow the exception to have the code committed to github repo".
 - Definition of Done: A feature is "done" only when it passes the automated validation and its visual flow is verified for correctness [790, conversation history].
 5. Infrastructure-as-Code & Cost Gating
 - Rule: Every infra-dependent feature requires a Terraform update (targeting AWS/Google Cloud) [790, conversation history].

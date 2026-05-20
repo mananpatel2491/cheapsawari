@@ -54,7 +54,7 @@ def verify(dry_run=False):
             # Relative path from root
             rel_path = path.relative_to(root)
             # Ignore .git directory and the manifest itself
-            if ".git" in rel_path.parts or rel_path.name == "Project_Structure.md" or "__pycache__" in rel_path.parts or rel_path.name == ".env":
+            if ".git" in rel_path.parts or rel_path.name == "Project_Structure.md" or "__pycache__" in rel_path.parts or rel_path.name == ".env" or "bootstrap_prompts" in rel_path.parts:
                 continue
             actual_files.append(str(rel_path.as_posix()))
 

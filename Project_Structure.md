@@ -13,6 +13,7 @@ This document provides a functional map of the codebase, enabling the Lead Agent
 | `PATTERNS.md` | **Pattern Registry**: Living document for established engineering patterns and design decisions. |
 | `scripts/` | **Agentic Skills**: Maintenance and hygiene scripts accessible to agents. |
 | `bruno/` | **API Validation**: Bruno collections and documentation for contract testing. |
+| `bootstrap_prompts/` | **Plan Archive**: Systematic prompts generated from user intent to start new sessions. |
 | `terraform/` | **Infrastructure-as-Code**: GCP/Terraform configuration for cost-gated deployments. |
 
 ## Application Layer (TBD)
@@ -20,14 +21,24 @@ This document provides a functional map of the codebase, enabling the Lead Agent
 | Path | Purpose |
 | :--- | :--- |
 | `src/` | Application source code. |
-| `docs/` | Extended documentation and design specs. |
+| `docs/Function_Mapping.md` | **Traceability Map**: Correlates frontend components with backend API functions. |
 
 ## Changelog
 
 | Date | Action | Files Affected | Summary |
 | :--- | :--- | :--- | :--- |
 | 2026-05-19 | INITIALIZE | `Project_Structure.md`, `GEMINI.md`, `README.md`, `.gitignore`, `LICENSE`, `PATTERNS.md`, `scripts/README.md`, `bruno/README.md`, `terraform/README.md` | Initial architecture mapping and framework bootstrapping for the Director layer. |
-| 2026-05-19 | REFACTOR | `scripts/verify_structure.py`, `scripts/verify-structure.ps1` | Refactored changelog consistency script: Replaced PowerShell version (`verify-structure.ps1`) with a cross-platform Python equivalent (`verify_structure.py`). |
-| 2026-05-20 | UPDATE | `GEMINI_Getting_Started.md`, `requirements.txt`, `PATTERNS.md`, `scripts/update_getting_started.py`, `scripts/optimize_changelog.py` | Bootstrapped Gemini integration ecosystem: Migrated to `google-genai`, added `.env` support, established automation patterns (CLI/Dry-Run), and added self-maintenance skills for documentation and changelog optimization. |
-| 2026-05-20 | REFACTOR | `scripts/verify_structure.py` | Standardized CLI interface using argparse to support fleet-wide consistency for --dry-run and --model arguments. |
-| 2026-05-20 | UPDATE | `README.md` | Expanded root documentation to provide a comprehensive project overview, role definitions, and maintenance workflows. |
+| 2026-05-19 | ADD | `scripts/verify_structure.py` | Added hygiene script (Python) to enforce changelog consistency. |
+| 2026-05-19 | DELETE | `scripts/verify-structure.ps1` | Removed PowerShell version in favor of cross-platform Python script. |
+| 2026-05-20 | ADD | `GEMINI_Getting_Started.md`, `scripts/update_getting_started.py` | Added onboarding documentation and an automated skill to keep it updated via Gemini API. |
+| 2026-05-20 | ADD | `requirements.txt` | Added dependency manifest to automate environment setup. |
+| 2026-05-20 | UPDATE | `requirements.txt`, `scripts/update_getting_started.py` | Migrated from deprecated `google-generativeai` to `google-genai` SDK. |
+| 2026-05-20 | UPDATE | `requirements.txt`, `scripts/update_getting_started.py` | Added `python-dotenv` support for more secure and portable API key management. |
+| 2026-05-20 | UPDATE | `scripts/update_getting_started.py` | Refined .env loading logic to use absolute project root paths for better reliability. |
+| 2026-05-20 | UPDATE | `scripts/update_getting_started.py` | Switched to `gemini-1.5-flash` to resolve 404 NOT_FOUND errors in the v1beta API. |
+| 2026-05-20 | FIX | `scripts/update_getting_started.py` | Forced SDK to use `v1` API endpoint to resolve model-not-found errors. |
+| 2026-05-20 | UPDATE | `scripts/update_getting_started.py` | Implemented dynamic model selection via `client.models.list()` to prevent future 404s. |
+| 2026-05-20 | UPDATE | `PATTERNS.md`, `scripts/update_getting_started.py` | Codified automation patterns (Python-only, dynamic LLM, CLI arguments, and dry-run support). |
+| 2026-05-20 | ADD | `scripts/optimize_changelog.py` | Added LLM-powered script to consolidate and clean the architectural changelog. |
+| 2026-05-20 | UPDATE | `PATTERNS.md`, `Project_Structure.md` | Added patterns for Contract-First Bruno validation and Full-Stack Traceability Mapping. |
+| 2026-05-20 | ADD | `scripts/generate_bootstrap_prompt.py` | Added skill to convert English intent into structured, context-aware bootstrap prompts. |
