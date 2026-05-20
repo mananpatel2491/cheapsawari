@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentic Vibe Fleet | Architecture Overview</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --accent: #38bdf8;
+            --text: #f1f5f9;
+            --secondary: #94a3b8;
+            --success: #22c55e;
+        }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+        }
+        .container { max-width: 1000px; width: 100%; }
+        header { text-align: center; margin-bottom: 3rem; }
+        h1 { color: var(--accent); font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .subtitle { color: var(--secondary); font-size: 1.1rem; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+        .card {
+            background: var(--card);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            transition: transform 0.2s;
+        }
+        .card:hover { transform: translateY(-5px); border-color: var(--accent); }
+        .card h3 { color: var(--accent); margin-top: 0; }
+        .card p { font-size: 0.9rem; line-height: 1.6; color: var(--secondary); }
+
+        .workflow {
+            background: var(--card);
+            padding: 2rem;
+            border-radius: 12px;
+            margin-top: 2rem;
+        }
+        .step-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .step-num {
+            background: var(--accent);
+            color: var(--bg);
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        .code {
+            background: #000;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-family: monospace;
+            color: var(--success);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Agentic Vibe Fleet 🛸</h1>
+            <p class="subtitle">A context-first framework for high-integrity autonomous engineering.</p>
+        </header>
+
+        <div class="grid">
+            <div class="card">
+                <h3>📜 The Constitution</h3>
+                <p>Located in <code>GEMINI.md</code>. Defines non-negotiable procedures: Plan-First, Context-First, and Cost Gating. It is the long-term memory for all sessions.</p>
+            </div>
+            <div class="card">
+                <h3>🗺️ Architecture Map</h3>
+                <p>Located in <code>Project_Structure.md</code>. The source of truth for all files. If it's not in the changelog, it's not in the project.</p>
+            </div>
+            <div class="card">
+                <h3>🛠️ Agentic Skills</h3>
+                <p>Located in <code>scripts/</code>. Autonomous tools for hygiene: <b>Verify</b> (Structure), <b>Optimize</b> (Logs), <b>Update</b> (Docs), and <b>Generate</b> (Prompts).</p>
+            </div>
+            <div class="card">
+                <h3>✅ Contract Testing</h3>
+                <p>Located in <code>bruno/</code>. Contract-first API validation. No code is committed without passing Bruno tests or an explicit exception.</p>
+            </div>
+        </div>
+
+        <div class="workflow">
+            <h2>🚀 The Vibe Coding Workflow</h2>
+            <div class="step-list">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div>Define intent in English and run <span class="code">generate_bootstrap_prompt.py</span>.</div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div>Copy the generated prompt into a fresh <b>Agent Mode</b> session.</div>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div>Gemini analyzes <b>Patterns</b> and <b>Structure</b> to build a surgical implementation plan.</div>
+                </div>
+                <div class="step">
+                    <div class="step-num">4</div>
+                    <div>Execute changes, run <span class="code">verify_structure.py</span>, and validate with Bruno.</div>
+                </div>
+                <div class="step">
+                    <div class="step-num">5</div>
+                    <div>Run <span class="code">optimize_changelog.py</span> to keep history clean for the next session.</div>
+                </div>
+            </div>
+        </div>
+
+        <footer style="margin-top: 4rem; text-align: center; color: var(--secondary); font-size: 0.8rem;">
+            <p>Agentic Vibe Fleet Template Baseline v0.0.1</p>
+        </footer>
+    </div>
+</body>
+</html>
