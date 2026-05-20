@@ -30,10 +30,10 @@ def get_logged_files(structure_file_path):
                     # Split by comma, remove backticks, and normalize paths
                     for file_entry in files_raw.split(","):
                         clean_name = file_entry.strip().replace("`", "")
-                        if clean_name and "Files Affected" not in clean_name and "---" not in clean_name:
-                            # Normalize to platform-specific path for comparison
-                            # Ensure we handle forward/backward slashes consistently
-                            normalized_path = str(Path(clean_name).as_posix())
+                        # Standardize logic to skip headers and separators
+                        if clean_name and not any(x in clean_name for x in ["Files Affected", "---", "Action", "Date"]):
+                            # Normalize to posix path for consistent comparison
+                            normalized_path = str(Path(clean_name.strip('/')).as_posix())
                             logged_files.add(normalized_path)
                             
     return logged_files

@@ -30,6 +30,28 @@ def select_model(client, model_override=None):
         print(f"Warning: Could not list models ({e}). Using default.")
         return 'models/gemini-1.5-flash'
 
+def get_logged_files_from_table(table_text):
+    """Extracts a set of normalized filenames from a markdown table string."""
+    files = set()
+    for line in table_text.splitlines():
+        if "|" in line:
+            parts = line.split("|")
+            if len(parts) >= 4:
+                # Column index 3 is 'Files Affected'
+                files_raw = parts[3].strip()
+                for file_entry in files_raw.split(","):
+                    clean_name = file_entry.strip().replace("`", "")
+                    # Standardize logic to skip headers and separators
+                    if clean_name and not any(x in clean_name for x in ["Files Affected", "---", "Action", "Date"]):
+                        # Normalize path for comparison
+                        try:
+                            # Ensure we normalize to posix and strip any trailing/leading slashes
+                            normalized = str(Path(clean_name.strip('/')).as_posix())
+                            files.add(normalized)
+                        except Exception:
+                            continue
+    return files
+
 def optimize_changelog(requested_model=None, dry_run=False):
     # 1. Setup Environment
     root = Path(__file__).resolve().parent.parent
@@ -62,14 +84,17 @@ def optimize_changelog(requested_model=None, dry_run=False):
     preamble = parts[0] + parts[1]
     changelog_table = parts[2].strip()
 
+    original_files = get_logged_files_from_table(changelog_table)
+
     # 3. Request Optimization
     prompt = f"""
     You are a technical documentation expert. Below is a Markdown table representing a project changelog.
     Your task is to optimize this table for readability:
-    1. Consolidate entries that occur on the same date for the same files/actions.
-    2. Ensure the summary is concise but captures the intent of all merged changes.
-    3. Maintain the exact Markdown table structure: | Date | Action | Files Affected | Summary |
-    4. Return ONLY the optimized table code, including the header and separators. No conversational text.
+    1. Consolidate entries that occur on the same date.
+    2. CRITICAL: The 'Files Affected' column MUST contain the union of ALL individual filenames from the consolidated rows. Do not use generic descriptions like 'various files'.
+    3. Ensure the summary is concise but captures the intent of all merged changes.
+    4. Maintain the exact Markdown table structure: | Date | Action | Files Affected | Summary |
+    5. Return ONLY the optimized table code, including the header and separators. No conversational text.
 
     CURRENT TABLE:
     {changelog_table}
@@ -82,6 +107,16 @@ def optimize_changelog(requested_model=None, dry_run=False):
 
         # Sanitize LLM output (remove triple backticks if present)
         optimized_table = re.sub(r"^```markdown\n|```$", "", optimized_table, flags=re.MULTILINE).strip()
+
+        # Validation Check: Ensure no files were lost in optimization
+        new_files = get_logged_files_from_table(optimized_table)
+        missing_files = original_files - new_files
+
+        if missing_files:
+            print(f"\033[91mERROR: Optimization failed integrity check.\033[0m")
+            print(f"The following files would be removed from the log, which would break verify_structure.py:")
+            for f in missing_files: print(f" - {f}")
+            return
 
         final_output = f"{preamble}\n\n{optimized_table}\n"
 

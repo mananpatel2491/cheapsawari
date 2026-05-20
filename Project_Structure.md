@@ -21,7 +21,7 @@ This document provides a functional map of the codebase, enabling the Lead Agent
 | Path | Purpose |
 | :--- | :--- |
 | `src/` | Application source code. |
-| `docs/Function_Mapping.md` | **Traceability Map**: Correlates frontend components with backend API functions. |
+| `Function_Mapping.md` | **Traceability Map**: Correlates frontend components with backend API functions. |
 
 ## Changelog
 
@@ -40,5 +40,6 @@ This document provides a functional map of the codebase, enabling the Lead Agent
 | 2026-05-20 | UPDATE | `scripts/update_getting_started.py` | Implemented dynamic model selection via `client.models.list()` to prevent future 404s. |
 | 2026-05-20 | UPDATE | `PATTERNS.md`, `scripts/update_getting_started.py` | Codified automation patterns (Python-only, dynamic LLM, CLI arguments, and dry-run support). |
 | 2026-05-20 | ADD | `scripts/optimize_changelog.py` | Added LLM-powered script to consolidate and clean the architectural changelog. |
-| 2026-05-20 | UPDATE | `PATTERNS.md`, `Project_Structure.md` | Added patterns for Contract-First Bruno validation and Full-Stack Traceability Mapping. |
-| 2026-05-20 | ADD | `scripts/generate_bootstrap_prompt.py` | Added skill to convert English intent into structured, context-aware bootstrap prompts. |
+| 2026-05-20 | UPDATE | `PATTERNS.md`, `Project_Structure.md`, `Function_Mapping.md` | Added patterns for Contract-First Bruno validation and Full-Stack Traceability Mapping. |
+| 2026-05-20 | ADD | `scripts/generate_bootstrap_prompt.py`, `bootstrap_prompts/` | Added 'Prompt Architect' skill to automate context-aware session planning and plan archiving. |
+| 2026-05-20 | BASELINE | ALL | **V0.0.1 Template Baseline**: Director Layer operational. Ready for autonomous vibe coding and replication. |

@@ -62,7 +62,8 @@ def update_docs(requested_model=None, dry_run=False):
     Specifically cover: 
     1. What is Agent mode and what happens when I do not use it?
     2. What is the Preview option in the context of code applications and models?
-    3. How to use the Fleet's Maintenance Skills. Note that optimize_changelog.py and verify_structure.py both support standard --model and --dry-run arguments.
+    3. How to use the Fleet's Maintenance Skills.
+    4. The 'Prompt Architect' workflow: Using generate_bootstrap_prompt.py to start every new feature or bug fix with high-context planning.
     Format the output as a clean Markdown document suitable for a 'Getting Started' guide.
     """
 
