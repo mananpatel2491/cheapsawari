@@ -1,0 +1,29 @@
+meta {
+  name: Cheapest · deterministic contract (JFK->LAX)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/offers/cheapest?origin=JFK&destination=LAX&date=2026-09-15
+}
+
+docs {
+  Core seam contract. The mock derives price/bucket purely from (origin,dest,date,cabin),
+  so these exact values are a reproducible contract. If the normalized Offer shape changes,
+  this breaks first.
+}
+
+assert {
+  res.status: eq 200
+  res.body.origin: eq JFK
+  res.body.destination: eq LAX
+  res.body.departure_date: eq 2026-09-15
+  res.body.price: eq 125
+  res.body.currency: eq USD
+  res.body.cabin: eq ECONOMY
+  res.body.fare_basis: eq QLXOW
+  res.body.provider: eq mock
+  res.body.carrier: isString
+  res.body.observed_at: isString
+}

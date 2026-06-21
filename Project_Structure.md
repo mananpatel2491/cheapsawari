@@ -16,13 +16,22 @@ This document provides a functional map of the codebase, enabling the Lead Agent
 | `bootstrap_prompts/` | **Plan Archive**: Systematic prompts generated from user intent to start new sessions. |
 | `terraform/` | **Infrastructure-as-Code**: GCP/Terraform configuration for cost-gated deployments. |
 
-## Application Layer (TBD)
+## Application Layer
 
 | Path | Purpose |
 | :--- | :--- |
-| `src/` | Application source code. |
+| `src/main.py` | **API**: FastAPI app. `GET /health` + `GET /api/v1/offers/cheapest` (Slice 1). |
+| `src/config.py` | **Settings**: Env-driven config (provider choice, Amadeus creds, timeouts). |
+| `src/models.py` | **Domain**: Provider-agnostic `Offer` model (the time-series record). |
+| `src/providers/base.py` | **Seam**: `FareProvider` ABC + `ProviderError`. The data-source contract. |
+| `src/providers/mock.py` | **Provider**: Deterministic, network-free mock (default; test-safe, zero quota). |
+| `src/providers/amadeus.py` | **Provider**: Amadeus Self-Service impl (OAuth2 + Flight Offers Search). |
+| `src/providers/factory.py` | **Selector**: Resolves the active provider from `FARE_PROVIDER`. |
+| `bruno/cheapsawari/` | **API Validation**: Bruno collection for the offers seam (gate: 24/24 assertions). |
 | `docs/architecture_overview.html` | **Visual Guide**: A 1-page HTML overview of the Agentic Vibe Fleet framework. (Excluded from `verify_structure.py` checks) |
 | `Function_Mapping.md` | **Traceability Map**: Correlates frontend components with backend API functions. |
+
+> **Roadmap (rolling MVP):** Slice 1 — fare-fetch seam ✅ · Slice 2 — watches + persistence · Slice 3 — scheduled polling (quota-capped) · Slice 4 — signal + single-channel alert · Slice 5 — minimal dashboard.
 
 ## Changelog
 
@@ -46,3 +55,4 @@ This document provides a functional map of the codebase, enabling the Lead Agent
 | 2026-05-20 | MOVE | `architecture_overview.html` | Moved visual architecture overview to `docs/` folder and excluded `docs/` from `verify_structure.py` checks. |
 | 2026-05-20 | BASELINE | ALL | **V0.0.1 Template Baseline**: Director Layer operational. Ready for autonomous vibe coding and replication. |
 | 2026-06-21 | UPDATE | `PATTERNS.md` | Synced Pattern Registry to current AVF framework: added Proactive Hardening, Production Readiness Gating, and Infrastructure Migration Advisory patterns. cheapsawari now at framework parity. |
+| 2026-06-21 | ADD | `src/__init__.py`, `src/config.py`, `src/models.py`, `src/main.py`, `src/providers/__init__.py`, `src/providers/base.py`, `src/providers/mock.py`, `src/providers/amadeus.py`, `src/providers/factory.py`, `bruno/cheapsawari/bruno.json`, `bruno/cheapsawari/environments/local.bru`, `bruno/cheapsawari/offers/health.bru`, `bruno/cheapsawari/offers/cheapest_deterministic.bru`, `bruno/cheapsawari/offers/cheapest_normalizes_lowercase.bru`, `bruno/cheapsawari/offers/cheapest_business_cabin.bru`, `bruno/cheapsawari/offers/no_inventory_404.bru`, `bruno/cheapsawari/offers/same_city_400.bru`, `bruno/cheapsawari/offers/bad_iata_422.bru`, `.env.example` | **Slice 1 — fare-fetch seam.** FastAPI `GET /api/v1/offers/cheapest` (+ `/health`) backed by a `FareProvider` interface with mock (default, zero-quota) and Amadeus implementations, returning a normalized `Offer`. Bruno gate green (7 req / 24 assertions) against mock. Cost review: $0 (no infra; local + mock). |

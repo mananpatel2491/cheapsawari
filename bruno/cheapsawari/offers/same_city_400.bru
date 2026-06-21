@@ -1,0 +1,17 @@
+meta {
+  name: Cheapest · identical origin/destination rejected
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/offers/cheapest?origin=JFK&destination=JFK&date=2026-09-15
+}
+
+docs {
+  Guard against a nonsensical route before any provider call is made.
+}
+
+assert {
+  res.status: eq 400
+}

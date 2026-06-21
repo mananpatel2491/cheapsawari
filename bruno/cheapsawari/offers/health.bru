@@ -1,0 +1,20 @@
+meta {
+  name: Health · liveness + active provider
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/health
+}
+
+docs {
+  Liveness probe. Confirms the suite runs against the mock provider (never the
+  live Amadeus quota).
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq ok
+  res.body.provider: eq mock
+}

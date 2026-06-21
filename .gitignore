@@ -1,25 +1,35 @@
-### AL ###
-#Template for AL projects for Dynamics 365 Business Central
-#launch.json folder
-.vscode/
-#Cache folder
-.alcache/
-#Symbols folder
-.alpackages/
-#Snapshots folder
-.snapshots/
-#Testing Output folder
-.output/
-#Extension App-file
-*.app
-#Rapid Application Development File
-rad.json
-#Translation Base-file
-*.g.xlf
-#License-files
-*.bclicense
-*.flf
-#Test results file
-TestResults.xml
-#Env Variables for Local Setup
+# --- Secrets / local env ---
 .env
+.env.local
+*.local
+
+# --- Python (backend) ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# --- Node / frontend (future Slice 5) ---
+node_modules/
+dist/
+build/
+.vite/
+*.log
+npm-debug.log*
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Terraform (future infra) ---
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log

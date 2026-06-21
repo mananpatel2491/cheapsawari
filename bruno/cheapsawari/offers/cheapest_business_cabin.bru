@@ -1,0 +1,19 @@
+meta {
+  name: Cheapest · cabin class honored (BUSINESS)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/offers/cheapest?origin=JFK&destination=LAX&date=2026-09-15&cabin=BUSINESS
+}
+
+docs {
+  Confirms the cabin parameter flows through the seam and is reflected in the Offer.
+}
+
+assert {
+  res.status: eq 200
+  res.body.cabin: eq BUSINESS
+  res.body.price: isNumber
+}

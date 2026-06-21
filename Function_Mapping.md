@@ -4,7 +4,8 @@ This document maps frontend UI components to their respective backend API endpoi
 
 | Frontend Component | Action | Backend Endpoint / Function | Documentation/Contract |
 | :--- | :--- | :--- | :--- |
-| *ExampleComponent.tsx* | *Fetch Data* | *GET /api/v1/data* | *bruno/collections/data/get_data.bru* |
+| *(Slice 5 — dashboard, TBD)* | Fetch cheapest fare for a route+date | `GET /api/v1/offers/cheapest` → `src/providers` `FareProvider.get_cheapest_offer` | `bruno/cheapsawari/offers/cheapest_deterministic.bru` |
+| *(infra / probe)* | Liveness + active provider | `GET /health` | `bruno/cheapsawari/offers/health.bru` |
 
 ## Maintenance Rules
 1. **Add**: When creating a new endpoint or component connection.

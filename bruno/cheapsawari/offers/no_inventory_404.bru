@@ -1,0 +1,18 @@
+meta {
+  name: Cheapest · no inventory returns 404
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/offers/cheapest?origin=JFK&destination=ZZZ&date=2026-09-15
+}
+
+docs {
+  ZZZ is the mock's documented no-inventory sentinel. Exercises the "provider returned
+  None" branch -> 404 (distinct from a provider error, which is 502).
+}
+
+assert {
+  res.status: eq 404
+}

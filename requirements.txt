@@ -1,2 +1,9 @@
+# --- AVF Director-layer tooling ---
 google-genai
 python-dotenv
+
+# --- cheapsawari backend (Slice 1: fare-fetch seam) ---
+fastapi
+uvicorn[standard]
+httpx
+pydantic

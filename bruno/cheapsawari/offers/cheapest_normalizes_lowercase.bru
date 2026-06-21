@@ -1,0 +1,21 @@
+meta {
+  name: Cheapest · lower-case IATA is normalized
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/offers/cheapest?origin=jfk&destination=lax&date=2026-09-15
+}
+
+docs {
+  Input hygiene: lower-case codes must be upper-cased at the edge so providers and
+  the stored time-series stay canonical.
+}
+
+assert {
+  res.status: eq 200
+  res.body.origin: eq JFK
+  res.body.destination: eq LAX
+  res.body.price: eq 125
+}

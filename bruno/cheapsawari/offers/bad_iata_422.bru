@@ -1,0 +1,18 @@
+meta {
+  name: Cheapest · malformed IATA rejected
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/offers/cheapest?origin=JF&destination=LAX&date=2026-09-15
+}
+
+docs {
+  IATA codes are exactly 3 letters; a 2-letter code must fail edge validation (422)
+  before reaching a provider.
+}
+
+assert {
+  res.status: eq 422
+}
