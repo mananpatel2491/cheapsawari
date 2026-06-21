@@ -45,3 +45,4 @@ This document provides a functional map of the codebase, enabling the Lead Agent
 | 2026-05-20 | ADD | `scripts/generate_bootstrap_prompt.py`, `bootstrap_prompts/` | Added 'Prompt Architect' skill to automate context-aware session planning and plan archiving. |
 | 2026-05-20 | MOVE | `architecture_overview.html` | Moved visual architecture overview to `docs/` folder and excluded `docs/` from `verify_structure.py` checks. |
 | 2026-05-20 | BASELINE | ALL | **V0.0.1 Template Baseline**: Director Layer operational. Ready for autonomous vibe coding and replication. |
+| 2026-06-21 | UPDATE | `PATTERNS.md` | Synced Pattern Registry to current AVF framework: added Proactive Hardening, Production Readiness Gating, and Infrastructure Migration Advisory patterns. cheapsawari now at framework parity. |
