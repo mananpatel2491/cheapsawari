@@ -1,0 +1,19 @@
+meta {
+  name: Poll · run without token rejected (401)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/poll
+  body: none
+}
+
+docs {
+  When POLL_TOKEN is configured, the endpoint must reject callers lacking the
+  X-Poll-Token header — protecting the public Cloud Run URL from quota-burning abuse.
+}
+
+assert {
+  res.status: eq 401
+}

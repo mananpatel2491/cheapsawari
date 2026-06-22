@@ -31,6 +31,13 @@ class Settings(BaseModel):
             "sqlite" — local, durable, zero-dependency, hermetic for tests. "firestore"
             is wired at Slice 3 (cloud).
         sqlite_path: Filesystem path for the SQLite store (when watch_store == "sqlite").
+        poll_max_per_run: Hard cap on how many active watches a single poll run will
+            query. The Amadeus free tier is ~2,000 req/month (~66/day); with one
+            scheduled run/day this default of 60 keeps the whole fleet under budget.
+            Budget math: poll_max_per_run × runs_per_day × 30 must stay < provider quota.
+        poll_token: Optional shared secret. If set, POST /api/v1/poll requires a matching
+            `X-Poll-Token` header (so a public Cloud Run URL can't be abused to burn quota).
+            If unset (local/dev), the endpoint is open.
     """
 
     fare_provider: str = "mock"
@@ -41,6 +48,8 @@ class Settings(BaseModel):
     request_timeout_s: float = 15.0
     watch_store: str = "sqlite"
     sqlite_path: str = "cheapsawari.db"
+    poll_max_per_run: int = 60
+    poll_token: str | None = None
 
 
 @lru_cache(maxsize=1)
@@ -55,4 +64,6 @@ def get_settings() -> Settings:
         request_timeout_s=float(os.getenv("REQUEST_TIMEOUT_S", "15.0")),
         watch_store=os.getenv("WATCH_STORE", "sqlite").strip().lower(),
         sqlite_path=os.getenv("SQLITE_PATH", "cheapsawari.db"),
+        poll_max_per_run=int(os.getenv("POLL_MAX_PER_RUN", "60")),
+        poll_token=os.getenv("POLL_TOKEN") or None,
     )

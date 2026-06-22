@@ -1,0 +1,29 @@
+meta {
+  name: Poll · run with token records snapshots
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/poll
+  body: none
+}
+
+headers {
+  X-Poll-Token: {{pollToken}}
+}
+
+docs {
+  Polls all active watches once (capped at POLL_MAX_PER_RUN). With watch A (has
+  inventory) and watch B (ZZZ) active, expect >=1 recorded and >=1 no_inventory,
+  no errors. Uses gte to stay robust to any other active watches.
+}
+
+assert {
+  res.status: eq 200
+  res.body.active_watches: gte 2
+  res.body.polled: gte 2
+  res.body.recorded: gte 1
+  res.body.no_inventory: gte 1
+  res.body.errors: eq 0
+}

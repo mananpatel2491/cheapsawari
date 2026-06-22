@@ -1,0 +1,26 @@
+meta {
+  name: Poll · setup watch A (has inventory)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "origin": "JFK",
+    "destination": "LAX",
+    "departure_date": "2026-09-15"
+  }
+}
+
+vars:post-response {
+  pollWatchA: res.body.id
+}
+
+assert {
+  res.status: eq 201
+}

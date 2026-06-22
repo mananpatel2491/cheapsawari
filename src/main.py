@@ -10,17 +10,18 @@ from __future__ import annotations
 
 from datetime import date as _date
 
-from fastapi import FastAPI, HTTPException, Path, Query
+from fastapi import FastAPI, Header, HTTPException, Path, Query
 
 from .config import get_settings
 from .models import Offer, PriceSnapshot, RefreshResult, Watch, WatchCreate
+from .poll import PollSummary, poll_active_watches
 from .providers import ProviderError, get_provider
 from .store import WatchNotFoundError, get_repository
 
 app = FastAPI(
     title="cheapsawari API",
     version="0.1.0",
-    description="Air flight fare-bucket booking tracker — Slice 1: fare-fetch seam.",
+    description="Air flight fare-bucket booking tracker.",
 )
 
 # IATA codes are exactly 3 letters. Enforce at the edge so providers can trust input.
@@ -135,3 +136,19 @@ def list_snapshots(
         return get_repository().list_snapshots(watch_id, limit=limit)
     except WatchNotFoundError as exc:
         raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.") from exc
+
+
+# --- Slice 3: scheduled polling -------------------------------------------
+
+@app.post("/api/v1/poll", response_model=PollSummary, tags=["poll"])
+def run_poll(x_poll_token: str | None = Header(default=None)) -> PollSummary:
+    """Poll all active watches once, capped at `POLL_MAX_PER_RUN` (quota protection).
+
+    Intended to be triggered on a schedule (Cloud Scheduler, once/day in prod). If
+    `POLL_TOKEN` is configured, a matching `X-Poll-Token` header is required — so a
+    public Cloud Run URL can't be hit by anyone to burn the fare-API quota.
+    """
+    settings = get_settings()
+    if settings.poll_token and x_poll_token != settings.poll_token:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Poll-Token.")
+    return poll_active_watches(get_repository(), get_provider(), settings.poll_max_per_run)

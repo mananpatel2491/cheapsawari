@@ -1,0 +1,13 @@
+meta {
+  name: Poll · cleanup watch B
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/watches/{{pollWatchB}}
+}
+
+assert {
+  res.status: eq 204
+}

@@ -1,0 +1,16 @@
+meta {
+  name: Poll · watch A got a snapshot
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches/{{pollWatchA}}/snapshots
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+  res.body[0].provider: eq mock
+  res.body[0].price: eq 125
+}

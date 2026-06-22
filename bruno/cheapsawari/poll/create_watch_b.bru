@@ -1,0 +1,31 @@
+meta {
+  name: Poll · setup watch B (ZZZ = no inventory)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "origin": "BOS",
+    "destination": "ZZZ",
+    "departure_date": "2026-10-01"
+  }
+}
+
+vars:post-response {
+  pollWatchB: res.body.id
+}
+
+docs {
+  ZZZ is the mock no-inventory sentinel, so the poll run should count this as
+  no_inventory (not recorded, not an error).
+}
+
+assert {
+  res.status: eq 201
+}

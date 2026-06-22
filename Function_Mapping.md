@@ -8,6 +8,7 @@ This document maps frontend UI components to their respective backend API endpoi
 | *(infra / probe)* | Liveness + active provider | `GET /health` | `bruno/cheapsawari/offers/health.bru` |
 | *(Slice 5 — add-watch form, TBD)* | Register / list / delete a tracked route | `POST` `GET` `DELETE /api/v1/watches` → `src/store` `WatchRepository` | `bruno/cheapsawari/watches/create_watch.bru` |
 | *(Slice 5 — dashboard, TBD)* | Poll a watch now / show price history | `POST .../{id}/refresh`, `GET .../{id}/snapshots` → `WatchRepository.add_snapshot` / `list_snapshots` | `bruno/cheapsawari/watches/refresh_watch.bru`, `.../list_snapshots.bru` |
+| *(Cloud Scheduler, Slice 3b)* | Poll all active watches on a schedule (quota-capped) | `POST /api/v1/poll` → `src/poll` `poll_active_watches` | `bruno/cheapsawari/poll/poll_run.bru` |
 
 ## Maintenance Rules
 1. **Add**: When creating a new endpoint or component connection.
