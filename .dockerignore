@@ -1,0 +1,23 @@
+# Keep the build context tiny — only src/ + requirements.txt are needed.
+.git/
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite*
+.env
+.env.*
+*.local
+.venv/
+venv/
+
+# Framework / docs / tooling not needed in the runtime image.
+bruno/
+terraform/
+docs/
+scripts/
+bootstrap_prompts/
+*.md
+LICENSE
+GEMINI*
+Function_Mapping.md
+node_modules/

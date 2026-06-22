@@ -1,0 +1,44 @@
+# Deployment (Slice 3b — cloud)
+
+cheapsawari runs on Google Cloud, project **`cheapsawari`**, region **`us-central1`**.
+
+## Live resources
+
+| Resource | Identity | Notes |
+| :--- | :--- | :--- |
+| Cloud Run service | `cheapsawari-api` | URL: `https://cheapsawari-api-444653658968.us-central1.run.app`. Public (`--allow-unauthenticated`), protected by `POLL_TOKEN`. Scales to zero. |
+| Firestore | `(default)`, Native mode, `us-central1` | Watches + snapshots. `watches/{id}` docs with a `snapshots/` subcollection. |
+| Cloud Scheduler | `cheapsawari-daily-poll` | `POST /api/v1/poll` daily at **08:00 America/Detroit**, header `X-Poll-Token`, body `{}`. |
+| Runtime SA | `444653658968-compute@developer.gserviceaccount.com` | Granted `roles/datastore.user`. |
+
+## Deployed configuration (Cloud Run env)
+- `FARE_PROVIDER=mock` — **deployed on mock to prove the pipeline.** Flip to `amadeus`
+  (and set `AMADEUS_CLIENT_ID` / `AMADEUS_CLIENT_SECRET`) once those keys are in hand.
+- `WATCH_STORE=firestore`
+- `POLL_TOKEN=<secret>` — generated at deploy time; the same value is set on the scheduler
+  header. Held locally in the gitignored `.deploy.local` (never committed).
+
+## Redeploy
+```bash
+source .deploy.local   # POLL_TOKEN
+gcloud run deploy cheapsawari-api --source . --region us-central1 --allow-unauthenticated \
+  --set-env-vars "FARE_PROVIDER=mock,WATCH_STORE=firestore,POLL_TOKEN=${POLL_TOKEN}" \
+  --project cheapsawari
+```
+
+To switch to live fares later:
+```bash
+gcloud run services update cheapsawari-api --region us-central1 --project cheapsawari \
+  --update-env-vars "FARE_PROVIDER=amadeus,AMADEUS_CLIENT_ID=...,AMADEUS_CLIENT_SECRET=..."
+```
+
+## Cost review
+~**$0/month** at personal scale: Cloud Run scales to zero (generous free tier), Firestore
+free tier (1 GiB + 50k reads/20k writes per day), Cloud Scheduler (3 free jobs/month).
+One scheduled poll/day with `POLL_MAX_PER_RUN=60` stays under the Amadeus free tier
+(~2,000 req/mo) when live fares are enabled.
+
+## Known follow-up
+Infrastructure was provisioned imperatively via `gcloud` (APIs, Firestore DB, Cloud Run,
+Scheduler, IAM). Per AVF Pattern 5 (Infrastructure-as-Code & Cost Gating), codifying these
+in `terraform/` is a tracked follow-up before any GitHub release tagging.

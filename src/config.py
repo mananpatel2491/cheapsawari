@@ -48,6 +48,7 @@ class Settings(BaseModel):
     request_timeout_s: float = 15.0
     watch_store: str = "sqlite"
     sqlite_path: str = "cheapsawari.db"
+    gcp_project: str | None = None
     poll_max_per_run: int = 60
     poll_token: str | None = None
 
@@ -64,6 +65,8 @@ def get_settings() -> Settings:
         request_timeout_s=float(os.getenv("REQUEST_TIMEOUT_S", "15.0")),
         watch_store=os.getenv("WATCH_STORE", "sqlite").strip().lower(),
         sqlite_path=os.getenv("SQLITE_PATH", "cheapsawari.db"),
+        # Cloud Run sets GOOGLE_CLOUD_PROJECT; locally falls back to GCP_PROJECT or ADC inference.
+        gcp_project=os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("GCP_PROJECT") or None,
         poll_max_per_run=int(os.getenv("POLL_MAX_PER_RUN", "60")),
         poll_token=os.getenv("POLL_TOKEN") or None,
     )
