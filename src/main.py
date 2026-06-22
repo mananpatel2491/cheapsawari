@@ -10,11 +10,12 @@ from __future__ import annotations
 
 from datetime import date as _date
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Path, Query
 
 from .config import get_settings
-from .models import Offer
+from .models import Offer, PriceSnapshot, RefreshResult, Watch, WatchCreate
 from .providers import ProviderError, get_provider
+from .store import WatchNotFoundError, get_repository
 
 app = FastAPI(
     title="cheapsawari API",
@@ -60,3 +61,77 @@ def cheapest_offer(
             detail=f"No offers for {origin}->{destination} on {date.isoformat()}.",
         )
     return offer
+
+
+# --- Slice 2: watches + persistence ---------------------------------------
+
+@app.post("/api/v1/watches", response_model=Watch, status_code=201, tags=["watches"])
+def create_watch(data: WatchCreate) -> Watch:
+    """Register a route+date to track. 400 if origin == destination."""
+    if data.origin.upper() == data.destination.upper():
+        raise HTTPException(status_code=400, detail="origin and destination must differ.")
+    return get_repository().create_watch(data)
+
+
+@app.get("/api/v1/watches", response_model=list[Watch], tags=["watches"])
+def list_watches(active_only: bool = Query(False, description="Only return active watches.")) -> list[Watch]:
+    """List tracked watches, newest first."""
+    return get_repository().list_watches(active_only=active_only)
+
+
+@app.get("/api/v1/watches/{watch_id}", response_model=Watch, tags=["watches"])
+def get_watch(watch_id: str = Path(..., description="Watch id.")) -> Watch:
+    """Fetch a single watch. 404 if unknown."""
+    watch = get_repository().get_watch(watch_id)
+    if watch is None:
+        raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.")
+    return watch
+
+
+@app.delete("/api/v1/watches/{watch_id}", status_code=204, tags=["watches"])
+def delete_watch(watch_id: str = Path(..., description="Watch id.")) -> None:
+    """Delete a watch and its snapshots. 404 if unknown."""
+    if not get_repository().delete_watch(watch_id):
+        raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.")
+
+
+@app.post("/api/v1/watches/{watch_id}/refresh", response_model=RefreshResult, tags=["watches"])
+def refresh_watch(watch_id: str = Path(..., description="Watch id.")) -> RefreshResult:
+    """Poll a watch once via the active provider and store a snapshot.
+
+    The manual precursor to Slice 3's scheduler — lets a watch accumulate price
+    history on demand. 404 if the watch is unknown; 502 on provider error;
+    `recorded=false` (200) if the route currently has no inventory.
+    """
+    repo = get_repository()
+    watch = repo.get_watch(watch_id)
+    if watch is None:
+        raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.")
+
+    try:
+        offer = get_provider().get_cheapest_offer(
+            watch.origin, watch.destination, watch.departure_date, watch.cabin
+        )
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if offer is None:
+        return RefreshResult(recorded=False, reason="no inventory")
+    snapshot = repo.add_snapshot(watch_id, offer)
+    return RefreshResult(recorded=True, snapshot=snapshot)
+
+
+@app.get(
+    "/api/v1/watches/{watch_id}/snapshots",
+    response_model=list[PriceSnapshot],
+    tags=["watches"],
+)
+def list_snapshots(
+    watch_id: str = Path(..., description="Watch id."),
+    limit: int = Query(100, ge=1, le=1000, description="Max snapshots to return."),
+) -> list[PriceSnapshot]:
+    """Return a watch's price history (newest first). 404 if the watch is unknown."""
+    try:
+        return get_repository().list_snapshots(watch_id, limit=limit)
+    except WatchNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.") from exc

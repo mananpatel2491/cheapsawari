@@ -1,0 +1,13 @@
+meta {
+  name: Watch · get unknown id returns 404
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches/does-not-exist
+}
+
+assert {
+  res.status: eq 404
+}

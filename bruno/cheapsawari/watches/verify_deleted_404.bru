@@ -1,0 +1,13 @@
+meta {
+  name: Watch · confirm deletion (404 after delete)
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches/{{watchId}}
+}
+
+assert {
+  res.status: eq 404
+}

@@ -1,0 +1,18 @@
+meta {
+  name: Watch · delete (cleanup, keeps suite idempotent)
+  type: http
+  seq: 9
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/watches/{{watchId}}
+}
+
+docs {
+  Removes the watch created by seq 1 (cascading its snapshots) so the suite leaves
+  no residue and can be re-run.
+}
+
+assert {
+  res.status: eq 204
+}

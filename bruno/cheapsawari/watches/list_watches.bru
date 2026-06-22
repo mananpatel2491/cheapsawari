@@ -1,0 +1,14 @@
+meta {
+  name: Watch · list
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+}

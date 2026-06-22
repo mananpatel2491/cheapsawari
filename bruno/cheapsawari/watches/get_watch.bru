@@ -1,0 +1,15 @@
+meta {
+  name: Watch · get by id
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches/{{watchId}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{watchId}}
+  res.body.origin: eq JFK
+}

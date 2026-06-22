@@ -1,0 +1,20 @@
+meta {
+  name: Watch · refresh again (history accumulates)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches/{{watchId}}/refresh
+  body: none
+}
+
+docs {
+  A second poll so the snapshot list has more than one row — the beginnings of
+  the price time-series that Slice 4's signal detection will read.
+}
+
+assert {
+  res.status: eq 200
+  res.body.recorded: eq true
+}

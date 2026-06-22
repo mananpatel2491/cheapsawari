@@ -27,6 +27,10 @@ class Settings(BaseModel):
             https://api.amadeus.com for production once a paid/keyed plan is in place.
         amadeus_currency: Currency to request offers in.
         request_timeout_s: Per-call HTTP timeout for outbound provider requests.
+        watch_store: Which WatchRepository to use ("sqlite" | "firestore"). Defaults to
+            "sqlite" — local, durable, zero-dependency, hermetic for tests. "firestore"
+            is wired at Slice 3 (cloud).
+        sqlite_path: Filesystem path for the SQLite store (when watch_store == "sqlite").
     """
 
     fare_provider: str = "mock"
@@ -35,6 +39,8 @@ class Settings(BaseModel):
     amadeus_base_url: str = "https://test.api.amadeus.com"
     amadeus_currency: str = "USD"
     request_timeout_s: float = 15.0
+    watch_store: str = "sqlite"
+    sqlite_path: str = "cheapsawari.db"
 
 
 @lru_cache(maxsize=1)
@@ -47,4 +53,6 @@ def get_settings() -> Settings:
         amadeus_base_url=os.getenv("AMADEUS_BASE_URL", "https://test.api.amadeus.com").rstrip("/"),
         amadeus_currency=os.getenv("AMADEUS_CURRENCY", "USD"),
         request_timeout_s=float(os.getenv("REQUEST_TIMEOUT_S", "15.0")),
+        watch_store=os.getenv("WATCH_STORE", "sqlite").strip().lower(),
+        sqlite_path=os.getenv("SQLITE_PATH", "cheapsawari.db"),
     )

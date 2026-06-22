@@ -1,0 +1,16 @@
+meta {
+  name: Watch · list snapshots (price history)
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches/{{watchId}}/snapshots
+}
+
+assert {
+  res.status: eq 200
+  res.body: isArray
+  res.body[0].watch_id: eq {{watchId}}
+  res.body[0].provider: eq mock
+}

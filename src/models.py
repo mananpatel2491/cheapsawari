@@ -38,3 +38,48 @@ class Offer(BaseModel):
         default_factory=lambda: datetime.now(timezone.utc),
         description="UTC timestamp the offer was observed — the time-series key.",
     )
+
+
+# --- Slice 2: watches + persistence ---------------------------------------
+
+class WatchCreate(BaseModel):
+    """Input for registering a new watch (a route+date the user wants tracked)."""
+
+    origin: str = Field(..., description="Origin IATA code.")
+    destination: str = Field(..., description="Destination IATA code.")
+    departure_date: _date = Field(..., description="Departure date to track.")
+    cabin: str = Field("ECONOMY", description="Cabin class to track.")
+
+
+class Watch(WatchCreate):
+    """A persisted watch. Identity + lifecycle on top of the user's input."""
+
+    id: str = Field(..., description="Stable watch id (uuid4).")
+    active: bool = Field(True, description="Whether the scheduler (Slice 3) should poll it.")
+    created_at: datetime = Field(..., description="UTC creation timestamp.")
+
+
+class PriceSnapshot(BaseModel):
+    """One observed fare for a watch — a row in the price time-series.
+
+    Built from an :class:`Offer` and tied to a watch. This is what signal
+    detection (Slice 4) will read to spot drops / reopened buckets.
+    """
+
+    id: str = Field(..., description="Stable snapshot id (uuid4).")
+    watch_id: str = Field(..., description="The watch this observation belongs to.")
+    price: float = Field(..., ge=0)
+    currency: str
+    cabin: str
+    fare_basis: str | None = None
+    carrier: str | None = None
+    provider: str
+    observed_at: datetime
+
+
+class RefreshResult(BaseModel):
+    """Outcome of polling a watch once and (maybe) recording a snapshot."""
+
+    recorded: bool = Field(..., description="True if a snapshot was stored.")
+    reason: str | None = Field(None, description="Why nothing was recorded (e.g. no inventory).")
+    snapshot: PriceSnapshot | None = None

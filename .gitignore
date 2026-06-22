@@ -3,6 +3,11 @@
 .env.local
 *.local
 
+# --- Local data store (SQLite; default WATCH_STORE=sqlite) ---
+*.db
+*.sqlite
+*.sqlite3
+
 # --- Python (backend) ---
 __pycache__/
 *.py[cod]

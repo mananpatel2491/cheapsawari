@@ -1,0 +1,24 @@
+meta {
+  name: Watch · refresh records a snapshot
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches/{{watchId}}/refresh
+  body: none
+}
+
+docs {
+  Manual precursor to the Slice 3 scheduler: polls the watch via the active
+  (mock) provider and stores one snapshot. Deterministic mock => price 125.
+}
+
+assert {
+  res.status: eq 200
+  res.body.recorded: eq true
+  res.body.snapshot.watch_id: eq {{watchId}}
+  res.body.snapshot.price: eq 125
+  res.body.snapshot.provider: eq mock
+  res.body.snapshot.fare_basis: eq QLXOW
+}

@@ -1,0 +1,22 @@
+meta {
+  name: Watch · create identical origin/destination rejected
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "origin": "JFK",
+    "destination": "JFK",
+    "departure_date": "2026-09-15"
+  }
+}
+
+assert {
+  res.status: eq 400
+}

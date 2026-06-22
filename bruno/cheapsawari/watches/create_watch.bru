@@ -1,0 +1,38 @@
+meta {
+  name: Watch · create (captures id)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "origin": "jfk",
+    "destination": "lax",
+    "departure_date": "2026-09-15",
+    "cabin": "economy"
+  }
+}
+
+vars:post-response {
+  watchId: res.body.id
+}
+
+docs {
+  Registers a route+date to track. Lower-case input must be normalized to upper-case.
+  The created id is captured into {{watchId}} for the rest of this self-contained suite.
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isString
+  res.body.origin: eq JFK
+  res.body.destination: eq LAX
+  res.body.cabin: eq ECONOMY
+  res.body.active: eq true
+  res.body.created_at: isString
+}
