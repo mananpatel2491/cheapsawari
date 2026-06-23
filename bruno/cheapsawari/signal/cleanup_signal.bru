@@ -1,0 +1,13 @@
+meta {
+  name: Signal · cleanup signal watch
+  type: http
+  seq: 13
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/watches/{{signalWatchId}}
+}
+
+assert {
+  res.status: eq 204
+}

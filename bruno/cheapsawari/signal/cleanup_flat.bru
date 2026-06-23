@@ -1,0 +1,13 @@
+meta {
+  name: Signal · cleanup flat watch
+  type: http
+  seq: 14
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/watches/{{flatWatchId}}
+}
+
+assert {
+  res.status: eq 204
+}

@@ -1,0 +1,27 @@
+meta {
+  name: Signal · create flat-series watch (captures id)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "origin": "SEA",
+    "destination": "BOS",
+    "departure_date": "2026-09-15"
+  }
+}
+
+vars:post-response {
+  flatWatchId: res.body.id
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isString
+}

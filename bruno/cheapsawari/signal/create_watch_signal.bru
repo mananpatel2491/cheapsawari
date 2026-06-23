@@ -1,0 +1,34 @@
+meta {
+  name: Signal · create watch (captures id)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "origin": "DTW",
+    "destination": "MIA",
+    "departure_date": "2026-09-15",
+    "cabin": "ECONOMY"
+  }
+}
+
+vars:post-response {
+  signalWatchId: res.body.id
+}
+
+docs {
+  Self-contained signal suite. We seed a deterministic price series via the manual
+  snapshot endpoint (the mock provider is stateless, so polling can't build a
+  trend), then assert detection. The created id flows through {{signalWatchId}}.
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isString
+}

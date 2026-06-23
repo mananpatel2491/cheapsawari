@@ -1,0 +1,21 @@
+meta {
+  name: Signal · no drop => no signal
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches/{{flatWatchId}}/signal
+}
+
+docs {
+  A flat series [100, 100, 100] never falls below the threshold, so detection
+  returns detected=false with a null signal.
+}
+
+assert {
+  res.status: eq 200
+  res.body.watch_id: eq {{flatWatchId}}
+  res.body.detected: eq false
+  res.body.signal: isNull
+}

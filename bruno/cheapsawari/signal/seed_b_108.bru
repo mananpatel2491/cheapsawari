@@ -1,0 +1,22 @@
+meta {
+  name: Signal · seed price 108 (baseline)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches/{{signalWatchId}}/snapshots
+  body: json
+}
+
+body:json {
+  {
+    "price": 108,
+    "observed_at": "2026-06-20T00:00:00Z"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.price: eq 108
+}

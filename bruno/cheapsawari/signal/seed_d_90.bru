@@ -1,0 +1,28 @@
+meta {
+  name: Signal · seed price 90 (the reopening)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches/{{signalWatchId}}/snapshots
+  body: json
+}
+
+body:json {
+  {
+    "price": 90,
+    "observed_at": "2026-06-22T00:00:00Z"
+  }
+}
+
+docs {
+  Latest fare = 90 vs trailing mean(110,108,112)=110 -> 90 < 110*0.85 (=93.5),
+  an 18.18% drop, and the prior point was not a drop => rising-edge "bucket
+  reopened".
+}
+
+assert {
+  res.status: eq 201
+  res.body.price: eq 90
+}

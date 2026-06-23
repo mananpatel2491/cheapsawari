@@ -1,0 +1,27 @@
+meta {
+  name: Signal · seed price 112 (prior, not a drop)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches/{{signalWatchId}}/snapshots
+  body: json
+}
+
+body:json {
+  {
+    "price": 112,
+    "observed_at": "2026-06-21T00:00:00Z"
+  }
+}
+
+docs {
+  This point sits above the trailing average, so it is NOT a drop. That matters:
+  it makes the next (cheaper) point a rising edge — the moment the bucket reopens.
+}
+
+assert {
+  res.status: eq 201
+  res.body.price: eq 112
+}

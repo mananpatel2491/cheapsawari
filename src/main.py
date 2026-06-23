@@ -9,13 +9,16 @@ return a normalized Offer. All the data-source complexity lives behind FareProvi
 from __future__ import annotations
 
 from datetime import date as _date
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, Header, HTTPException, Path, Query
 
+from .alerts import get_alert_channel
 from .config import get_settings
-from .models import Offer, PriceSnapshot, RefreshResult, Watch, WatchCreate
+from .models import Offer, PriceSnapshot, RefreshResult, SnapshotCreate, Watch, WatchCreate
 from .poll import PollSummary, poll_active_watches
 from .providers import ProviderError, get_provider
+from .signal import SignalResult, detect_reopening
 from .store import WatchNotFoundError, get_repository
 
 app = FastAPI(
@@ -138,6 +141,67 @@ def list_snapshots(
         raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.") from exc
 
 
+@app.post(
+    "/api/v1/watches/{watch_id}/snapshots",
+    response_model=PriceSnapshot,
+    status_code=201,
+    tags=["watches"],
+)
+def record_snapshot(
+    data: SnapshotCreate, watch_id: str = Path(..., description="Watch id.")
+) -> PriceSnapshot:
+    """Manually record an observed fare for a watch (provider='manual').
+
+    Lets you log a price you spotted, or backfill history. 404 if the watch is
+    unknown. The cabin defaults to the watch's cabin; observed_at defaults to now.
+    """
+    repo = get_repository()
+    watch = repo.get_watch(watch_id)
+    if watch is None:
+        raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.")
+
+    offer = Offer(
+        origin=watch.origin,
+        destination=watch.destination,
+        departure_date=watch.departure_date,
+        price=data.price,
+        currency=data.currency,
+        cabin=(data.cabin or watch.cabin).upper(),
+        fare_basis=data.fare_basis,
+        carrier=data.carrier,
+        provider="manual",
+        observed_at=data.observed_at or datetime.now(timezone.utc),
+    )
+    return repo.add_snapshot(watch_id, offer)
+
+
+# --- Slice 4: signal detection --------------------------------------------
+
+@app.get(
+    "/api/v1/watches/{watch_id}/signal",
+    response_model=SignalResult,
+    tags=["signal"],
+)
+def get_signal(watch_id: str = Path(..., description="Watch id.")) -> SignalResult:
+    """Detect a freshly reopened cheaper bucket in a watch's price history.
+
+    Reads the watch's snapshot series and applies the trailing moving-average
+    drop test (defaults: >15% below the 7-day average, rising edge only). 404 if
+    the watch is unknown; otherwise `detected` is false when no signal fires.
+    """
+    repo = get_repository()
+    settings = get_settings()
+    try:
+        snapshots = repo.list_snapshots(watch_id, limit=1000)
+    except WatchNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.") from exc
+
+    signal = detect_reopening(
+        snapshots, settings.signal_threshold_pct, settings.signal_window_days
+    )
+    return SignalResult(watch_id=watch_id, detected=signal is not None, signal=signal)
+
+
 # --- Slice 3: scheduled polling -------------------------------------------
 
 @app.post("/api/v1/poll", response_model=PollSummary, tags=["poll"])
@@ -151,4 +215,11 @@ def run_poll(x_poll_token: str | None = Header(default=None)) -> PollSummary:
     settings = get_settings()
     if settings.poll_token and x_poll_token != settings.poll_token:
         raise HTTPException(status_code=401, detail="Invalid or missing X-Poll-Token.")
-    return poll_active_watches(get_repository(), get_provider(), settings.poll_max_per_run)
+    return poll_active_watches(
+        get_repository(),
+        get_provider(),
+        settings.poll_max_per_run,
+        alerter=get_alert_channel(settings),
+        threshold_pct=settings.signal_threshold_pct,
+        window_days=settings.signal_window_days,
+    )

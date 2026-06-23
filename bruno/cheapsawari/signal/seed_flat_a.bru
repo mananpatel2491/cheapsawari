@@ -1,0 +1,21 @@
+meta {
+  name: Signal · flat seed 100 (a)
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches/{{flatWatchId}}/snapshots
+  body: json
+}
+
+body:json {
+  {
+    "price": 100,
+    "observed_at": "2026-06-20T00:00:00Z"
+  }
+}
+
+assert {
+  res.status: eq 201
+}

@@ -1,0 +1,27 @@
+meta {
+  name: Signal · detects reopened bucket
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches/{{signalWatchId}}/signal
+}
+
+docs {
+  With the seeded series [110, 108, 112, 90], the latest fare is 18.18% below the
+  7-day moving average (110) on a rising edge, so a bucket_reopened signal fires.
+}
+
+assert {
+  res.status: eq 200
+  res.body.watch_id: eq {{signalWatchId}}
+  res.body.detected: eq true
+  res.body.signal.kind: eq bucket_reopened
+  res.body.signal.current_price: eq 90
+  res.body.signal.baseline_price: eq 110
+  res.body.signal.drop_pct: eq 18.18
+  res.body.signal.currency: eq USD
+  res.body.signal.window_days: eq 7
+  res.body.signal.threshold_pct: eq 15
+}

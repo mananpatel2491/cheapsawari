@@ -51,6 +51,15 @@ class Settings(BaseModel):
     gcp_project: str | None = None
     poll_max_per_run: int = 60
     poll_token: str | None = None
+    # --- Slice 4: signal detection + alerts ---
+    # alert_channel: "log" (default; zero-cost, prod-safe) or "webhook".
+    # alert_webhook_url: target for the webhook channel (Slack/Discord/generic incoming hook).
+    # signal_threshold_pct: drop below the trailing average that counts as a reopened bucket.
+    # signal_window_days: length of the trailing moving-average window.
+    alert_channel: str = "log"
+    alert_webhook_url: str | None = None
+    signal_threshold_pct: float = 15.0
+    signal_window_days: int = 7
 
 
 @lru_cache(maxsize=1)
@@ -69,4 +78,8 @@ def get_settings() -> Settings:
         gcp_project=os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("GCP_PROJECT") or None,
         poll_max_per_run=int(os.getenv("POLL_MAX_PER_RUN", "60")),
         poll_token=os.getenv("POLL_TOKEN") or None,
+        alert_channel=os.getenv("ALERT_CHANNEL", "log").strip().lower(),
+        alert_webhook_url=os.getenv("ALERT_WEBHOOK_URL") or None,
+        signal_threshold_pct=float(os.getenv("SIGNAL_THRESHOLD_PCT", "15.0")),
+        signal_window_days=int(os.getenv("SIGNAL_WINDOW_DAYS", "7")),
     )

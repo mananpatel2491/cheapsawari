@@ -83,3 +83,24 @@ class RefreshResult(BaseModel):
     recorded: bool = Field(..., description="True if a snapshot was stored.")
     reason: str | None = Field(None, description="Why nothing was recorded (e.g. no inventory).")
     snapshot: PriceSnapshot | None = None
+
+
+# --- Slice 4: signal detection + alerts -----------------------------------
+
+class SnapshotCreate(BaseModel):
+    """Input for manually recording an observed fare for a watch.
+
+    Lets a user log a price they spotted (or backfill history) without waiting for
+    the scheduled poll. Stored exactly like a polled snapshot, tagged
+    ``provider='manual'``. Also the deterministic way contract tests seed a price
+    series — the mock provider is stateless, so polling alone can't build a trend.
+    """
+
+    price: float = Field(..., ge=0, description="Observed total price.")
+    currency: str = Field("USD", description="ISO 4217 currency code.")
+    cabin: str | None = Field(None, description="Cabin class; defaults to the watch's cabin.")
+    fare_basis: str | None = Field(None, description="Observed fare basis / bucket code.")
+    carrier: str | None = Field(None, description="Validating/marketing carrier IATA code.")
+    observed_at: datetime | None = Field(
+        None, description="When it was observed (UTC). Defaults to now; set it for backfill."
+    )
