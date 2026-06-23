@@ -16,13 +16,18 @@ cheapsawari runs on Google Cloud, project **`cheapsawari`**, region **`us-centra
   (and set `AMADEUS_CLIENT_ID` / `AMADEUS_CLIENT_SECRET`) once those keys are in hand.
 - `WATCH_STORE=firestore`
 - `POLL_TOKEN=<secret>` — generated at deploy time; the same value is set on the scheduler
-  header. Held locally in the gitignored `.deploy.local` (never committed).
+  header. `.deploy.local` is gone; recover the value from
+  `gcloud run services describe cheapsawari-api --region us-central1 --format='value(spec.template.spec.containers[0].env)'`.
+- `ALERT_CHANNEL=log` (Slice 4) — alerts go to Cloud Run logs (zero-cost, prod-safe). To
+  deliver outbound, set `ALERT_CHANNEL=webhook` + `ALERT_WEBHOOK_URL=<slack/discord/generic hook>`.
+
+> **Current revision:** `cheapsawari-api-00002-bmv` (Slice 4 — signal detection + alerts), deployed 2026-06-23.
 
 ## Redeploy
 ```bash
-source .deploy.local   # POLL_TOKEN
+# POLL_TOKEN: recover from the running service (see above) into $POLL_TOKEN, then:
 gcloud run deploy cheapsawari-api --source . --region us-central1 --allow-unauthenticated \
-  --set-env-vars "FARE_PROVIDER=mock,WATCH_STORE=firestore,POLL_TOKEN=${POLL_TOKEN}" \
+  --set-env-vars "FARE_PROVIDER=mock,WATCH_STORE=firestore,POLL_TOKEN=${POLL_TOKEN},ALERT_CHANNEL=log" \
   --project cheapsawari
 ```
 
