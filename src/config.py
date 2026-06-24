@@ -46,6 +46,10 @@ class Settings(BaseModel):
     amadeus_client_secret: str | None = None
     amadeus_base_url: str = "https://test.api.amadeus.com"
     amadeus_currency: str = "USD"
+    # Travelpayouts (Aviasales) — the live provider after Amadeus Self-Service shut down.
+    # Free, affiliate-token gated; returns cached cheapest-price-by-route data.
+    travelpayouts_token: str | None = None
+    travelpayouts_currency: str = "usd"
     request_timeout_s: float = 15.0
     watch_store: str = "sqlite"
     sqlite_path: str = "cheapsawari.db"
@@ -72,6 +76,8 @@ def get_settings() -> Settings:
         amadeus_client_secret=os.getenv("AMADEUS_CLIENT_SECRET"),
         amadeus_base_url=os.getenv("AMADEUS_BASE_URL", "https://test.api.amadeus.com").rstrip("/"),
         amadeus_currency=os.getenv("AMADEUS_CURRENCY", "USD"),
+        travelpayouts_token=os.getenv("TRAVELPAYOUTS_TOKEN") or None,
+        travelpayouts_currency=os.getenv("TRAVELPAYOUTS_CURRENCY", "usd").strip().lower(),
         request_timeout_s=float(os.getenv("REQUEST_TIMEOUT_S", "15.0")),
         watch_store=os.getenv("WATCH_STORE", "sqlite").strip().lower(),
         sqlite_path=os.getenv("SQLITE_PATH", "cheapsawari.db"),

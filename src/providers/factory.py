@@ -5,6 +5,7 @@ from ..config import Settings, get_settings
 from .base import FareProvider, ProviderError
 from .amadeus import AmadeusFareProvider
 from .mock import MockFareProvider
+from .travelpayouts import TravelpayoutsFareProvider
 
 
 def get_provider(settings: Settings | None = None) -> FareProvider:
@@ -17,6 +18,11 @@ def get_provider(settings: Settings | None = None) -> FareProvider:
     name = settings.fare_provider
     if name == "mock":
         return MockFareProvider()
+    if name == "travelpayouts":
+        return TravelpayoutsFareProvider(settings)
     if name == "amadeus":
+        # Retained for reference; Amadeus Self-Service was decommissioned 2026-07-17.
         return AmadeusFareProvider(settings)
-    raise ProviderError(f"Unknown FARE_PROVIDER '{name}' (expected 'mock' or 'amadeus').")
+    raise ProviderError(
+        f"Unknown FARE_PROVIDER '{name}' (expected 'mock', 'travelpayouts', or 'amadeus')."
+    )
