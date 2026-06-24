@@ -22,11 +22,16 @@ from datetime import datetime, timezone
 
 from google.cloud import firestore
 
-from ..models import Offer, PriceSnapshot, Watch, WatchCreate
+from ..models import Offer, PriceSnapshot, SnapshotLeg, TripLeg, Watch, WatchCreate
 from .base import WatchNotFoundError, WatchRepository, build_snapshot
 
 _WATCHES = "watches"
 _SNAPSHOTS = "snapshots"
+
+
+def _dump_legs(legs):
+    """Serialize TripLeg/SnapshotLeg list to plain dicts for a Firestore array field."""
+    return [leg.model_dump(mode="json") for leg in legs] if legs else None
 
 
 def _now() -> datetime:
@@ -64,6 +69,7 @@ class FirestoreWatchRepository(WatchRepository):
             depart_flex_days=int(d.get("depart_flex_days", 0)),
             return_flex_days=int(d.get("return_flex_days", 0)),
             owner_email=d.get("owner_email"),
+            legs=[TripLeg(**leg) for leg in d["legs"]] if d.get("legs") else None,
         )
 
     @staticmethod
@@ -84,6 +90,7 @@ class FirestoreWatchRepository(WatchRepository):
             outbound_date=_date.fromisoformat(od) if od else None,
             return_price=d.get("return_price"),
             return_date=_date.fromisoformat(rd) if rd else None,
+            legs=[SnapshotLeg(**leg) for leg in d["legs"]] if d.get("legs") else None,
         )
 
     # --- watches ------------------------------------------------------------
@@ -101,6 +108,7 @@ class FirestoreWatchRepository(WatchRepository):
             depart_flex_days=data.depart_flex_days,
             return_flex_days=data.return_flex_days,
             owner_email=owner_email,
+            legs=data.legs,
         )
         self._db.collection(_WATCHES).document(watch.id).set(
             {
@@ -115,6 +123,7 @@ class FirestoreWatchRepository(WatchRepository):
                 "depart_flex_days": watch.depart_flex_days,
                 "return_flex_days": watch.return_flex_days,
                 "owner_email": watch.owner_email,
+                "legs": _dump_legs(watch.legs),
             }
         )
         return watch
@@ -147,18 +156,15 @@ class FirestoreWatchRepository(WatchRepository):
     def add_snapshot(
         self,
         watch_id: str,
-        offer: Offer,
+        legs: list[Offer],
         *,
         total: float | None = None,
-        outbound_date=None,
-        return_offer: Offer | None = None,
+        trip_type: str = "one_way",
     ) -> PriceSnapshot:
         ref = self._db.collection(_WATCHES).document(watch_id)
         if not ref.get().exists:
             raise WatchNotFoundError(watch_id)
-        snap = build_snapshot(
-            watch_id, offer, total=total, outbound_date=outbound_date, return_offer=return_offer
-        )
+        snap = build_snapshot(watch_id, legs, total=total, trip_type=trip_type)
         ref.collection(_SNAPSHOTS).document(snap.id).set(
             {
                 "price": snap.price,
@@ -172,6 +178,7 @@ class FirestoreWatchRepository(WatchRepository):
                 "outbound_date": snap.outbound_date.isoformat() if snap.outbound_date else None,
                 "return_price": snap.return_price,
                 "return_date": snap.return_date.isoformat() if snap.return_date else None,
+                "legs": _dump_legs(snap.legs),
             }
         )
         return snap

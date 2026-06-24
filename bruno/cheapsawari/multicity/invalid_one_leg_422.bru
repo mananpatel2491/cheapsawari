@@ -1,0 +1,27 @@
+meta {
+  name: Multi-city · fewer than 2 legs is rejected (422)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "trip_type": "multi_city",
+    "legs": [
+      { "origin": "dtw", "destination": "cdg", "date": "2026-12-08" }
+    ]
+  }
+}
+
+docs {
+  A multi-city trip needs at least 2 legs.
+}
+
+assert {
+  res.status: eq 422
+}

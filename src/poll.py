@@ -84,11 +84,7 @@ def poll_active_watches(
             continue
 
         repo.add_snapshot(
-            watch.id,
-            quote.outbound,
-            total=quote.total,
-            outbound_date=quote.outbound.departure_date,
-            return_offer=quote.return_leg,
+            watch.id, quote.legs, total=quote.total, trip_type=watch.trip_type
         )
         recorded += 1
 

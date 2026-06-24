@@ -53,6 +53,13 @@
     grid-column: 1 / -1; display: flex; gap: 18px; flex-wrap: wrap;
     color: var(--muted); font-size: 12.5px;
   }
+  .mc { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .mc-hint { font-size: 12.5px; color: var(--muted); }
+  .legrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .legrow input { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font: inherit; }
+  .legrow input.lo, .legrow input.ld { width: 80px; text-transform: uppercase; }
+  .legrow input.lflex { width: 70px; }
+  .legrow .arrow { color: var(--muted); }
   .meta { color: var(--muted); font-size: 13px; }
   .price { font-size: 22px; font-weight: 700; text-align: right; }
   .price small { font-size: 13px; color: var(--muted); font-weight: 500; }
@@ -88,12 +95,13 @@
       <select id="tripType">
         <option value="one_way">One-way</option>
         <option value="round_trip">Round-trip</option>
+        <option value="multi_city">Multi-city</option>
       </select>
     </label>
-    <label>Origin<input id="origin" maxlength="3" placeholder="DTW" required></label>
-    <label>Destination<input id="destination" maxlength="3" placeholder="AMD" required></label>
-    <label>Departure<input id="date" type="date" required></label>
-    <label>± days<input id="departFlex" type="number" min="0" max="21" value="0" title="Also search this many days after the departure date"></label>
+    <label class="simple">Origin<input id="origin" maxlength="3" placeholder="DTW" required></label>
+    <label class="simple">Destination<input id="destination" maxlength="3" placeholder="AMD" required></label>
+    <label class="simple">Departure<input id="date" type="date" required></label>
+    <label class="simple">± days<input id="departFlex" type="number" min="0" max="21" value="0" title="Also search this many days after the departure date"></label>
     <label class="rt" hidden>Return<input id="returnDate" type="date"></label>
     <label class="rt" hidden>± days<input id="returnFlex" type="number" min="0" max="21" value="0" title="Also search this many days after the return date"></label>
     <label>Cabin
@@ -103,6 +111,13 @@
       </select>
     </label>
     <button type="submit">+ Track</button>
+    <div class="mc" id="mcBuilder" hidden>
+      <div class="mc-hint">Add each leg in order. Tip: route through a city to track a
+        <b>transfer airport</b> (DTW→CDG→AMD), or set your first <b>port of entry</b> on the
+        way home (AMD→JFK→DTW).</div>
+      <div id="legRows"></div>
+      <button type="button" class="ghost" id="addLeg">+ Add leg</button>
+    </div>
   </form>
   <div id="cards" class="cards"></div>
   <div id="status"></div>
@@ -159,13 +174,39 @@ function badge(signal, hasData) {
 // Format a leg's anchor date with its flexibility window, e.g. "2026-12-08 (+6d)".
 const flexLabel = (d, flex) => d + (flex > 0 ? ` (+${flex}d)` : "");
 
-// Round-trip price breakdown from the latest snapshot (outbound + return legs).
+// The route headline: one-way "A → B", round-trip "A ⇄ B", multi-city "A → B → C → …".
+function routeLabel(w) {
+  if (w.trip_type === "multi_city" && w.legs && w.legs.length) {
+    const chain = [w.legs[0].origin, ...w.legs.map((l) => l.destination)];
+    return chain.join(" → ");
+  }
+  return `${w.origin} ${w.trip_type === "round_trip" ? "⇄" : "→"} ${w.destination}`;
+}
+
+function tripTag(w) {
+  if (w.trip_type === "round_trip") return '<span class="tag">round-trip</span>';
+  if (w.trip_type === "multi_city") return `<span class="tag">multi-city · ${w.legs ? w.legs.length : 0} legs</span>`;
+  return "";
+}
+
+// Per-leg price breakdown from the latest snapshot (round-trip = 2 legs, multi-city = N).
 function legsLine(w, latest) {
-  if (w.trip_type !== "round_trip" || !latest || latest.return_price == null) return "";
-  return `<div class="legs">
-    <span>↗ out ${latest.outbound_date} · ${fmt(latest.outbound_price)}</span>
-    <span>↘ ret ${latest.return_date} · ${fmt(latest.return_price)}</span>
-  </div>`;
+  if (!latest || !latest.legs || latest.legs.length < 2) return "";
+  const segs = latest.legs.map(
+    (l) => `<span>${l.origin}→${l.destination} ${l.date} · ${fmt(l.price)}</span>`
+  ).join("");
+  return `<div class="legs">${segs}</div>`;
+}
+
+// The dates/flex summary under the route, by trip shape.
+function datesLine(w) {
+  if (w.trip_type === "multi_city") {
+    return w.legs ? w.legs.map((l) => flexLabel(l.date, l.flex_days)).join(" → ") : "";
+  }
+  if (w.trip_type === "round_trip") {
+    return `${flexLabel(w.departure_date, w.depart_flex_days)} ⇄ ${flexLabel(w.return_date, w.return_flex_days)}`;
+  }
+  return flexLabel(w.departure_date, w.depart_flex_days);
 }
 
 function card(w, snaps, signal) {
@@ -173,15 +214,10 @@ function card(w, snaps, signal) {
   const chrono = [...snaps].reverse();
   const prices = chrono.map((s) => s.price);
   const latest = snaps.length ? snaps[0] : null;
-  const rt = w.trip_type === "round_trip";
-  const arrow = rt ? "⇄" : "→";
-  const dates = rt
-    ? `${flexLabel(w.departure_date, w.depart_flex_days)} ${arrow} ${flexLabel(w.return_date, w.return_flex_days)}`
-    : flexLabel(w.departure_date, w.depart_flex_days);
   return `<div class="card" data-id="${w.id}">
     <div>
-      <div class="route">${w.origin} ${arrow} ${w.destination} ${rt ? '<span class="tag">round-trip</span>' : ""}</div>
-      <div class="meta">${dates} · ${w.cabin}${w.active ? "" : " · paused"}</div>
+      <div class="route">${routeLabel(w)} ${tripTag(w)}</div>
+      <div class="meta">${datesLine(w)} · ${w.cabin}${w.active ? "" : " · paused"}</div>
     </div>
     <div class="price">${latest ? fmt(latest.price) : "—"}<small>${latest ? " " + latest.currency : ""}</small></div>
     ${legsLine(w, latest)}
@@ -221,35 +257,81 @@ async function load() {
   }
 }
 
-// Show/hide the return-leg inputs to match the selected trip type.
+// One leg-builder row for multi-city.
+function addLegRow(origin = "", dest = "") {
+  const row = document.createElement("div");
+  row.className = "legrow";
+  row.innerHTML =
+    `<input class="lo" maxlength="3" placeholder="From" value="${origin}">` +
+    `<span class="arrow">→</span>` +
+    `<input class="ld" maxlength="3" placeholder="To" value="${dest}">` +
+    `<input class="ldate" type="date">` +
+    `<input class="lflex" type="number" min="0" max="21" value="0" title="± days">` +
+    `<button type="button" class="ghost rmLeg" title="Remove leg">✕</button>`;
+  $("legRows").appendChild(row);
+}
+
+// Switch the form between one-way / round-trip / multi-city.
 function syncTripType() {
-  const rt = $("tripType").value === "round_trip";
-  document.querySelectorAll(".add .rt").forEach((el) => (el.hidden = !rt));
-  $("returnDate").required = rt;
+  const t = $("tripType").value;
+  const simple = t !== "multi_city";
+  document.querySelectorAll(".add .simple").forEach((el) => (el.hidden = !simple));
+  document.querySelectorAll(".add .rt").forEach((el) => (el.hidden = t !== "round_trip"));
+  $("mcBuilder").hidden = t !== "multi_city";
+  // Required only applies to visible inputs (hidden required fields block submit).
+  ["origin", "destination", "date"].forEach((id) => ($(id).required = simple));
+  $("returnDate").required = t === "round_trip";
+  // Seed two leg rows the first time multi-city is opened.
+  if (t === "multi_city" && $("legRows").children.length === 0) { addLegRow(); addLegRow(); }
 }
 $("tripType").addEventListener("change", syncTripType);
+$("addLeg").addEventListener("click", () => addLegRow());
+$("legRows").addEventListener("click", (e) => {
+  if (!e.target.classList.contains("rmLeg")) return;
+  if ($("legRows").children.length <= 2) return; // multi-city needs ≥ 2 legs
+  e.target.closest(".legrow").remove();
+});
 
 $("addForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const tripType = $("tripType").value;
-  const body = {
-    origin: $("origin").value.trim().toUpperCase(),
-    destination: $("destination").value.trim().toUpperCase(),
-    departure_date: $("date").value,
-    cabin: $("cabin").value,
-    trip_type: tripType,
-    depart_flex_days: Number($("departFlex").value) || 0,
-  };
-  if (tripType === "round_trip") {
-    body.return_date = $("returnDate").value;
-    body.return_flex_days = Number($("returnFlex").value) || 0;
+  let body;
+  if (tripType === "multi_city") {
+    const legs = [...$("legRows").children].map((row) => ({
+      origin: row.querySelector(".lo").value.trim().toUpperCase(),
+      destination: row.querySelector(".ld").value.trim().toUpperCase(),
+      date: row.querySelector(".ldate").value,
+      flex_days: Number(row.querySelector(".lflex").value) || 0,
+    })).filter((l) => l.origin && l.destination && l.date);
+    if (legs.length < 2) {
+      $("status").innerHTML = `<div class="error">Add at least 2 complete legs.</div>`;
+      return;
+    }
+    body = { trip_type: "multi_city", cabin: $("cabin").value, legs };
+  } else {
+    body = {
+      origin: $("origin").value.trim().toUpperCase(),
+      destination: $("destination").value.trim().toUpperCase(),
+      departure_date: $("date").value,
+      cabin: $("cabin").value,
+      trip_type: tripType,
+      depart_flex_days: Number($("departFlex").value) || 0,
+    };
+    if (tripType === "round_trip") {
+      body.return_date = $("returnDate").value;
+      body.return_flex_days = Number($("returnFlex").value) || 0;
+    }
   }
   const r = await fetch(API + "/watches", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
   });
   if (r.status === 401) { location.href = "/login"; return; }
-  if (r.ok) { $("addForm").reset(); syncTripType(); load(); }
-  else {
+  if (r.ok) {
+    $("addForm").reset();
+    $("legRows").innerHTML = "";
+    syncTripType();
+    load();
+  } else {
     let d = `Could not add watch (${r.status}).`;
     try { const j = await r.json(); if (typeof j.detail === "string") d = j.detail; } catch {}
     $("status").innerHTML = `<div class="error">${d}</div>`;

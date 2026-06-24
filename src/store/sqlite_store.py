@@ -8,14 +8,20 @@ Datetimes are stored as ISO-8601 UTC strings; dates as ISO date strings.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from contextlib import contextmanager
 from datetime import date as _date
 from datetime import datetime, timezone
 
-from ..models import Offer, PriceSnapshot, Watch, WatchCreate
+from ..models import Offer, PriceSnapshot, SnapshotLeg, TripLeg, Watch, WatchCreate
 from .base import WatchNotFoundError, WatchRepository, build_snapshot
+
+
+def _dump_legs(legs) -> str | None:
+    """Serialize a list of TripLeg/SnapshotLeg to a JSON string (or None)."""
+    return json.dumps([leg.model_dump(mode="json") for leg in legs]) if legs else None
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS watches (
@@ -30,7 +36,8 @@ CREATE TABLE IF NOT EXISTS watches (
     return_date      TEXT,
     depart_flex_days INTEGER NOT NULL DEFAULT 0,
     return_flex_days INTEGER NOT NULL DEFAULT 0,
-    owner_email      TEXT
+    owner_email      TEXT,
+    legs_json        TEXT
 );
 CREATE TABLE IF NOT EXISTS snapshots (
     id          TEXT PRIMARY KEY,
@@ -46,6 +53,7 @@ CREATE TABLE IF NOT EXISTS snapshots (
     outbound_date  TEXT,
     return_price   REAL,
     return_date    TEXT,
+    legs_json      TEXT,
     FOREIGN KEY (watch_id) REFERENCES watches(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_snapshots_watch ON snapshots(watch_id, observed_at);
@@ -61,12 +69,14 @@ _MIGRATIONS = {
         ("depart_flex_days", "INTEGER NOT NULL DEFAULT 0"),
         ("return_flex_days", "INTEGER NOT NULL DEFAULT 0"),
         ("owner_email", "TEXT"),  # Slice 8 — per-user ownership
+        ("legs_json", "TEXT"),    # Slice 9 — multi-city legs
     ],
     "snapshots": [
         ("outbound_price", "REAL"),
         ("outbound_date", "TEXT"),
         ("return_price", "REAL"),
         ("return_date", "TEXT"),
+        ("legs_json", "TEXT"),    # Slice 9 — per-leg breakdown
     ],
 }
 
@@ -118,6 +128,7 @@ class SqliteWatchRepository(WatchRepository):
             depart_flex_days=row["depart_flex_days"],
             return_flex_days=row["return_flex_days"],
             owner_email=row["owner_email"],
+            legs=[TripLeg(**d) for d in json.loads(row["legs_json"])] if row["legs_json"] else None,
         )
 
     @staticmethod
@@ -136,6 +147,7 @@ class SqliteWatchRepository(WatchRepository):
             outbound_date=_date.fromisoformat(row["outbound_date"]) if row["outbound_date"] else None,
             return_price=row["return_price"],
             return_date=_date.fromisoformat(row["return_date"]) if row["return_date"] else None,
+            legs=[SnapshotLeg(**d) for d in json.loads(row["legs_json"])] if row["legs_json"] else None,
         )
 
     # --- watches ------------------------------------------------------------
@@ -153,12 +165,13 @@ class SqliteWatchRepository(WatchRepository):
             depart_flex_days=data.depart_flex_days,
             return_flex_days=data.return_flex_days,
             owner_email=owner_email,
+            legs=data.legs,
         )
         with self._conn() as conn:
             conn.execute(
                 "INSERT INTO watches (id, origin, destination, departure_date, cabin, active, "
-                "created_at, trip_type, return_date, depart_flex_days, return_flex_days, owner_email) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "created_at, trip_type, return_date, depart_flex_days, return_flex_days, owner_email, legs_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     watch.id,
                     watch.origin,
@@ -172,6 +185,7 @@ class SqliteWatchRepository(WatchRepository):
                     watch.depart_flex_days,
                     watch.return_flex_days,
                     watch.owner_email,
+                    _dump_legs(watch.legs),
                 ),
             )
         return watch
@@ -205,22 +219,19 @@ class SqliteWatchRepository(WatchRepository):
     def add_snapshot(
         self,
         watch_id: str,
-        offer: Offer,
+        legs: list[Offer],
         *,
         total: float | None = None,
-        outbound_date=None,
-        return_offer: Offer | None = None,
+        trip_type: str = "one_way",
     ) -> PriceSnapshot:
         if self.get_watch(watch_id) is None:
             raise WatchNotFoundError(watch_id)
-        snap = build_snapshot(
-            watch_id, offer, total=total, outbound_date=outbound_date, return_offer=return_offer
-        )
+        snap = build_snapshot(watch_id, legs, total=total, trip_type=trip_type)
         with self._conn() as conn:
             conn.execute(
                 "INSERT INTO snapshots (id, watch_id, price, currency, cabin, fare_basis, carrier, "
-                "provider, observed_at, outbound_price, outbound_date, return_price, return_date) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "provider, observed_at, outbound_price, outbound_date, return_price, return_date, legs_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     snap.id,
                     snap.watch_id,
@@ -235,6 +246,7 @@ class SqliteWatchRepository(WatchRepository):
                     snap.outbound_date.isoformat() if snap.outbound_date else None,
                     snap.return_price,
                     snap.return_date.isoformat() if snap.return_date else None,
+                    _dump_legs(snap.legs),
                 ),
             )
         return snap

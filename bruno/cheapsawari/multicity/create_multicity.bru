@@ -1,0 +1,49 @@
+meta {
+  name: Multi-city · create a 4-leg round trip via a transfer + port-of-entry
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "trip_type": "multi_city",
+    "cabin": "economy",
+    "legs": [
+      { "origin": "dtw", "destination": "cdg", "date": "2026-12-08", "flex_days": 3 },
+      { "origin": "cdg", "destination": "amd", "date": "2026-12-09" },
+      { "origin": "amd", "destination": "jfk", "date": "2027-01-05", "flex_days": 3 },
+      { "origin": "jfk", "destination": "dtw", "date": "2027-01-06" }
+    ]
+  }
+}
+
+vars:post-response {
+  mcId: res.body.id
+}
+
+docs {
+  Slice 9: a multi-city chain. CDG is a chosen transfer hub on the way out; JFK is the
+  first US port of entry on the way home. The overall start and end are the SAME city
+  (DTW→…→DTW), which must be allowed for multi_city (the per-leg origin≠destination rule
+  still applies). Endpoints are derived from the first/last leg.
+}
+
+assert {
+  res.status: eq 201
+  res.body.trip_type: eq multi_city
+  res.body.origin: eq DTW
+  res.body.destination: eq DTW
+}
+
+tests {
+  test("watch persists all 4 legs", function () {
+    expect(res.body.legs.length).to.equal(4);
+    expect(res.body.legs[0].origin).to.equal("DTW");
+    expect(res.body.legs[3].destination).to.equal("DTW");
+  });
+}

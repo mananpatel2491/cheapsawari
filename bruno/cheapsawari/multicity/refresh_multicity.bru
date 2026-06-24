@@ -1,0 +1,32 @@
+meta {
+  name: Multi-city · refresh prices every leg and sums the trip
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches/{{mcId}}/refresh
+  body: none
+}
+
+docs {
+  Each leg is window-searched via the mock provider; the snapshot's price is the sum of
+  all four legs, with the per-leg breakdown in `legs`.
+}
+
+assert {
+  res.status: eq 200
+  res.body.recorded: eq true
+  res.body.snapshot.price: isNumber
+}
+
+tests {
+  test("snapshot has all 4 priced legs", function () {
+    expect(res.body.snapshot.legs.length).to.equal(4);
+  });
+  test("trip total equals the sum of the legs", function () {
+    const legs = res.body.snapshot.legs;
+    const sum = Math.round(legs.reduce((a, l) => a + l.price, 0) * 100) / 100;
+    expect(res.body.snapshot.price).to.equal(sum);
+  });
+}

@@ -1,0 +1,20 @@
+meta {
+  name: Multi-city · snapshot carries the full leg breakdown
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches/{{mcId}}/snapshots
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("persisted snapshot exposes all 4 legs", function () {
+    expect(res.body[0].legs.length).to.equal(4);
+    expect(res.body[0].legs[0].origin).to.equal("DTW");
+  });
+}

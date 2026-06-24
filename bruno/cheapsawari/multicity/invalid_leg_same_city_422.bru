@@ -1,0 +1,28 @@
+meta {
+  name: Multi-city · a leg with same origin/destination is rejected (422)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "trip_type": "multi_city",
+    "legs": [
+      { "origin": "dtw", "destination": "dtw", "date": "2026-12-08" },
+      { "origin": "cdg", "destination": "amd", "date": "2026-12-09" }
+    ]
+  }
+}
+
+docs {
+  The overall trip may start and end in the same city, but an individual leg may not.
+}
+
+assert {
+  res.status: eq 422
+}

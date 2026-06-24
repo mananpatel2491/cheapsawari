@@ -39,11 +39,13 @@ cd bruno/cheapsawari && bru run --env local
 ```
 
 ## Current status
-**78 requests / 188 assertions / 8 tests, all passing.**
+**84 requests / 199 assertions / 12 tests, all passing.**
 - `auth/` (Slice 6) — no-session 401, dev login (owner), allowlist add/list/revoke,
   owner-vs-invitee gating (403), non-allowlisted refusal, public auth-config.
 - `ownership/` (Slice 8) — watches are private per user: invitee sees only their own,
   cannot read/delete the owner's (404), and the admin sees every user's watch.
+- `multicity/` (Slice 9) — a 4-leg round multi-city (transfer + port-of-entry) create +
+  refresh (total = sum of legs), per-leg snapshot persistence, and the 422 guards.
 - `roundtrip/` (Slice 7) — flexible round-trip create + refresh (trip total =
   outbound+return, both dates inside their flex windows), per-leg snapshot fields,
   one-way-with-flex, and the 422 guards (missing/invalid return_date).

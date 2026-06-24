@@ -239,8 +239,13 @@ def _owned_watch(repo, watch_id: str, user: SessionUser) -> Watch:
 
 @app.post("/api/v1/watches", response_model=Watch, status_code=201, tags=["watches"])
 def create_watch(data: WatchCreate, user: SessionUser = Depends(auth.require_user)) -> Watch:
-    """Register a route+date to track, owned by the signed-in user. 400 if origin == destination."""
-    if data.origin.upper() == data.destination.upper():
+    """Register a trip to track, owned by the signed-in user.
+
+    400 if origin == destination — except for a multi_city trip, whose overall start and
+    end may legitimately be the same city (a round multi-city); its per-leg origin≠destination
+    rule is enforced in the model.
+    """
+    if data.trip_type != "multi_city" and data.origin.upper() == data.destination.upper():
         raise HTTPException(status_code=400, detail="origin and destination must differ.")
     return get_repository().create_watch(data, owner_email=user.email)
 
@@ -297,11 +302,7 @@ def refresh_watch(
     if quote is None:
         return RefreshResult(recorded=False, reason="no inventory")
     snapshot = repo.add_snapshot(
-        watch_id,
-        quote.outbound,
-        total=quote.total,
-        outbound_date=quote.outbound.departure_date,
-        return_offer=quote.return_leg,
+        watch_id, quote.legs, total=quote.total, trip_type=watch.trip_type
     )
     return RefreshResult(recorded=True, snapshot=snapshot)
 
@@ -353,7 +354,7 @@ def record_snapshot(
         provider="manual",
         observed_at=data.observed_at or datetime.now(timezone.utc),
     )
-    return repo.add_snapshot(watch_id, offer)
+    return repo.add_snapshot(watch_id, [offer], total=offer.price, trip_type=watch.trip_type)
 
 
 # --- Slice 4: signal detection --------------------------------------------

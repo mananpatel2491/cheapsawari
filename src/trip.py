@@ -1,12 +1,14 @@
-"""Trip pricing — Slice 7 (round-trip + date flexibility).
+"""Trip pricing — Slice 7 (flexible round-trip) + Slice 9 (multi-city).
 
-Turns a :class:`Watch` (which may be one-way or round-trip, with a flexible date
-window on each leg) into a single cheapest :class:`TripQuote`, using only the
-existing per-date ``FareProvider.get_cheapest_offer`` seam:
+Turns a :class:`Watch` of any shape — one-way, round-trip, or multi-city — into a
+single cheapest :class:`TripQuote`, using only the existing per-date
+``FareProvider.get_cheapest_offer`` seam:
 
+    * every watch resolves to an ordered list of legs (``Watch.resolved_legs``):
+      one-way = 1 leg, round-trip = 2, multi-city = N.
     * a leg with ``flex_days = N`` is searched across N+1 consecutive dates from its
-      anchor, keeping the cheapest;
-    * a round trip prices both legs and sums them.
+      anchor, keeping the cheapest.
+    * the trip total is the sum of the legs.
 
 Provider-agnostic by construction — it composes single-date lookups, so it works
 identically on the mock (deterministic tests) and on Travelpayouts (cached fares).
@@ -25,15 +27,14 @@ from .providers import FareProvider
 
 
 class TripQuote(BaseModel):
-    """The cheapest priced trip for a watch at one point in time."""
+    """The cheapest priced trip for a watch at one point in time (one Offer per leg)."""
 
-    outbound: Offer
-    return_leg: Offer | None = None
+    legs: list[Offer]
     total: float
 
     @property
     def currency(self) -> str:
-        return self.outbound.currency
+        return self.legs[0].currency
 
 
 def _cheapest_in_window(
@@ -63,24 +64,17 @@ def _cheapest_in_window(
 def price_watch_trip(provider: FareProvider, watch: Watch) -> TripQuote | None:
     """Price a watch's cheapest trip, or None if it has no bookable inventory.
 
-    For a round trip, *both* legs must have inventory somewhere in their windows;
-    otherwise there is no complete trip to quote and None is returned.
+    *Every* leg must have inventory somewhere in its window; if any leg is empty there
+    is no complete trip to quote and None is returned.
     """
-    outbound = _cheapest_in_window(
-        provider, watch.origin, watch.destination,
-        watch.departure_date, watch.depart_flex_days, watch.cabin,
-    )
-    if outbound is None:
-        return None
-
-    return_leg: Offer | None = None
-    if watch.trip_type == "round_trip" and watch.return_date is not None:
-        return_leg = _cheapest_in_window(
-            provider, watch.destination, watch.origin,
-            watch.return_date, watch.return_flex_days, watch.cabin,
+    priced: list[Offer] = []
+    for leg in watch.resolved_legs:
+        offer = _cheapest_in_window(
+            provider, leg.origin, leg.destination, leg.date, leg.flex_days, watch.cabin
         )
-        if return_leg is None:
+        if offer is None:
             return None
+        priced.append(offer)
 
-    total = round(outbound.price + (return_leg.price if return_leg else 0.0), 2)
-    return TripQuote(outbound=outbound, return_leg=return_leg, total=total)
+    total = round(sum(o.price for o in priced), 2)
+    return TripQuote(legs=priced, total=total)
