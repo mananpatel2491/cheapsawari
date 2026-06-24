@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cheapsawari — fare bucket tracker</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a2129; --line: #2a3441; --text: #e6edf3;
+    --muted: #8b98a5; --accent: #4cc9f0; --good: #2ecc71; --good-bg: #173d2a;
+    --warn: #f0a04c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+  header {
+    padding: 20px 24px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  }
+  header h1 { margin: 0; font-size: 20px; letter-spacing: .5px; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  header .spacer { flex: 1; }
+  main { padding: 24px; max-width: 1000px; margin: 0 auto; }
+  .add {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: end;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px; margin-bottom: 22px;
+  }
+  .add label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  .add input, .add select {
+    background: var(--bg); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 8px 10px; font: inherit; min-width: 90px;
+  }
+  button {
+    background: var(--accent); color: #03242e; border: 0; border-radius: 6px;
+    padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
+  button:active { transform: translateY(1px); }
+  .cards { display: grid; gap: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px; display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: center;
+  }
+  .route { font-size: 18px; font-weight: 600; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .price { font-size: 22px; font-weight: 700; text-align: right; }
+  .price small { font-size: 13px; color: var(--muted); font-weight: 500; }
+  .spark { grid-column: 1 / -1; }
+  .row2 { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+    border-radius: 999px; font-size: 12px; font-weight: 600;
+  }
+  .badge.reopened { background: var(--good-bg); color: var(--good); border: 1px solid var(--good); }
+  .badge.watching { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  .badge.nodata { background: transparent; color: var(--warn); border: 1px solid var(--line); }
+  .row2 .spacer { flex: 1; }
+  .empty, .error { color: var(--muted); text-align: center; padding: 40px; }
+  .error { color: #ff6b6b; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>✈️ cheapsawari</h1>
+  <span class="sub">fare-bucket tracker · provider: <b id="provider">…</b></span>
+  <span class="spacer"></span>
+  <button class="ghost" id="refresh">↻ Refresh</button>
+</header>
+<main>
+  <form class="add" id="addForm">
+    <label>Origin<input id="origin" maxlength="3" placeholder="JFK" required></label>
+    <label>Destination<input id="destination" maxlength="3" placeholder="LAX" required></label>
+    <label>Departure<input id="date" type="date" required></label>
+    <label>Cabin
+      <select id="cabin">
+        <option>ECONOMY</option><option>PREMIUM_ECONOMY</option>
+        <option>BUSINESS</option><option>FIRST</option>
+      </select>
+    </label>
+    <button type="submit">+ Track</button>
+  </form>
+  <div id="cards" class="cards"></div>
+  <div id="status"></div>
+</main>
+
+<script>
+const API = "/api/v1";
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+async function jget(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(url + " → " + r.status);
+  return r.json();
+}
+
+// Inline-SVG sparkline of a chronological price series.
+function sparkline(prices) {
+  if (prices.length < 2) return "";
+  const W = 600, H = 40, pad = 2;
+  const min = Math.min(...prices), max = Math.max(...prices);
+  const span = max - min || 1;
+  const pts = prices.map((p, i) => {
+    const x = pad + (i * (W - 2 * pad)) / (prices.length - 1);
+    const y = H - pad - ((p - min) / span) * (H - 2 * pad);
+    return x.toFixed(1) + "," + y.toFixed(1);
+  }).join(" ");
+  const last = prices[prices.length - 1], first = prices[0];
+  const stroke = last < first ? "var(--good)" : "var(--accent)";
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" width="100%" height="40">
+    <polyline fill="none" stroke="${stroke}" stroke-width="2" points="${pts}"/>
+  </svg>`;
+}
+
+function badge(signal, hasData) {
+  if (signal && signal.detected) {
+    const s = signal.signal;
+    return `<span class="badge reopened">▼ Bucket reopened −${fmt(s.drop_pct)}%</span>`;
+  }
+  if (hasData) return `<span class="badge watching">watching</span>`;
+  return `<span class="badge nodata">no data yet</span>`;
+}
+
+function card(w, snaps, signal) {
+  // snapshots arrive newest-first; chronological for the sparkline.
+  const chrono = [...snaps].reverse();
+  const prices = chrono.map((s) => s.price);
+  const latest = snaps.length ? snaps[0] : null;
+  return `<div class="card" data-id="${w.id}">
+    <div>
+      <div class="route">${w.origin} → ${w.destination}</div>
+      <div class="meta">${w.departure_date} · ${w.cabin}${w.active ? "" : " · paused"}</div>
+    </div>
+    <div class="price">${latest ? fmt(latest.price) : "—"}<small>${latest ? " " + latest.currency : ""}</small></div>
+    ${sparkline(prices)}
+    <div class="row2">
+      ${badge(signal, snaps.length > 0)}
+      <span class="meta">${snaps.length} snapshot${snaps.length === 1 ? "" : "s"}</span>
+      <span class="spacer"></span>
+      <button class="ghost del">Delete</button>
+    </div>
+  </div>`;
+}
+
+async function load() {
+  $("status").textContent = "";
+  try {
+    jget("/health").then((h) => ($("provider").textContent = h.provider)).catch(() => {});
+    const watches = await jget(API + "/watches");
+    if (!watches.length) {
+      $("cards").innerHTML = "";
+      $("status").innerHTML = `<div class="empty">No watches yet — add a route above to start tracking fare buckets.</div>`;
+      return;
+    }
+    // Fetch each watch's history + signal in parallel.
+    const enriched = await Promise.all(watches.map(async (w) => {
+      const [snaps, signal] = await Promise.all([
+        jget(`${API}/watches/${w.id}/snapshots?limit=100`).catch(() => []),
+        jget(`${API}/watches/${w.id}/signal`).catch(() => null),
+      ]);
+      return { w, snaps, signal };
+    }));
+    $("cards").innerHTML = enriched.map(({ w, snaps, signal }) => card(w, snaps, signal)).join("");
+  } catch (e) {
+    $("cards").innerHTML = "";
+    $("status").innerHTML = `<div class="error">Failed to load: ${e.message}</div>`;
+  }
+}
+
+$("addForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const body = {
+    origin: $("origin").value.trim().toUpperCase(),
+    destination: $("destination").value.trim().toUpperCase(),
+    departure_date: $("date").value,
+    cabin: $("cabin").value,
+  };
+  const r = await fetch(API + "/watches", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  if (r.ok) { $("addForm").reset(); load(); }
+  else { $("status").innerHTML = `<div class="error">Could not add watch (${r.status}).</div>`; }
+});
+
+$("refresh").addEventListener("click", load);
+
+$("cards").addEventListener("click", async (e) => {
+  if (!e.target.classList.contains("del")) return;
+  const id = e.target.closest(".card").dataset.id;
+  if (!confirm("Delete this watch and its price history?")) return;
+  await fetch(`${API}/watches/${id}`, { method: "DELETE" });
+  load();
+});
+
+load();
+</script>
+</body>
+</html>

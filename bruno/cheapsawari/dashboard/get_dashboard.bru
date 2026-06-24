@@ -1,0 +1,22 @@
+meta {
+  name: Dashboard · serves the SPA at /
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/
+}
+
+docs {
+  Slice 5: the minimal single-page dashboard is served by the same FastAPI app
+  (one $0 service, no separate frontend host). Assert it returns HTML containing
+  the app name and the signal-badge marker.
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: contains text/html
+  res.body: contains cheapsawari
+  res.body: contains Bucket reopened
+}

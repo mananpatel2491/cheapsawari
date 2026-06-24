@@ -10,8 +10,10 @@ from __future__ import annotations
 
 from datetime import date as _date
 from datetime import datetime, timezone
+from pathlib import Path as _Path
 
 from fastapi import FastAPI, Header, HTTPException, Path, Query
+from fastapi.responses import FileResponse
 
 from .alerts import get_alert_channel
 from .config import get_settings
@@ -29,6 +31,20 @@ app = FastAPI(
 
 # IATA codes are exactly 3 letters. Enforce at the edge so providers can trust input.
 _IATA = r"^[A-Za-z]{3}$"
+
+# Single-page dashboard (Slice 5), served from the same app — no separate frontend
+# build or hosting, so the whole product stays one $0 Cloud Run service.
+_DASHBOARD = _Path(__file__).parent / "web" / "dashboard.html"
+
+
+@app.get("/", include_in_schema=False)
+def dashboard() -> FileResponse:
+    """Minimal dashboard: watches, price-history sparklines, and signal badges.
+
+    Static HTML + vanilla JS that calls the JSON API from the same origin. Kept
+    out of the OpenAPI schema since it's a UI page, not a contract endpoint.
+    """
+    return FileResponse(_DASHBOARD, media_type="text/html")
 
 
 @app.get("/health", tags=["meta"])
