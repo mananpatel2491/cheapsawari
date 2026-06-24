@@ -31,7 +31,7 @@ This project is built for maximum "vibe coding" efficiency using the Google Gemi
 Use the **Vibe Code / Build mode in Google AI Studio** to generate the frontend. You can prompt Gemini to build the interactive calendar and yield tracking charts without writing boilerplate CSS.
 
 ### 2. API Configuration
-*   Obtain a free **Amadeus Developer API** key (allows up to 2,000 monthly requests).
+*   Obtain a free **Amadeus Developer API** key. Free quotas are per-API and vary (~200–10k calls/month; confirm yours in the Amadeus Workspace); the test environment serves limited/cached data.
 *   Get a **Gemini API Key** from Google AI Studio to handle the "cognitive" analysis of price drops.
 
 ### 3. Deployment

@@ -3,10 +3,14 @@
 Wraps the Amadeus Flight Offers Search API behind the FareProvider seam.
 
 QUOTA (the design constraint that shapes the whole tracker):
-    The Self-Service *test* environment allows ~2,000 free requests/month — roughly
-    66/day. Each get_cheapest_offer() call = 1 OAuth token reuse + 1 search request.
-    Slice 3's scheduler must therefore cap polls/day across all active watches. The
-    mock provider is the default precisely so tests never spend this budget.
+    Self-Service free quotas are PER-API and vary (~200–10,000 calls/month depending
+    on the endpoint) — there is no single flat number; confirm the live Flight Offers
+    Search quota in your Amadeus account Workspace. Beyond it you get 429 in test, or
+    pay-per-call in production. Each get_cheapest_offer() call = 1 OAuth token reuse +
+    1 search request. Slice 3's scheduler therefore caps polls/day across all active
+    watches (POLL_MAX_PER_RUN); set that cap to fit your confirmed quota. The mock
+    provider is the default precisely so tests never spend this budget. NOTE: the test
+    environment also serves limited/cached data, not full live inventory.
 
 AUTH:
     OAuth2 client-credentials. Set AMADEUS_CLIENT_ID / AMADEUS_CLIENT_SECRET in .env.

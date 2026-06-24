@@ -4,10 +4,10 @@ Iterates the active watches, queries the configured FareProvider for each, and
 records a price snapshot. This is the unattended heartbeat of the tracker; in
 production a once-a-day Cloud Scheduler job calls the endpoint that wraps it.
 
-The cap is the whole point: external fare APIs are quota-limited (Amadeus free
-tier ≈ 2,000 req/month), so a single run never queries more than
-`max_per_run` watches. One provider failure does not abort the run — it's
-counted and the run continues.
+The cap is the whole point: external fare APIs are quota-limited (Amadeus
+Self-Service free quotas are per-API and vary — confirm yours in the account
+Workspace), so a single run never queries more than `max_per_run` watches. One
+provider failure does not abort the run — it's counted and the run continues.
 """
 from __future__ import annotations
 

@@ -32,9 +32,10 @@ class Settings(BaseModel):
             is wired at Slice 3 (cloud).
         sqlite_path: Filesystem path for the SQLite store (when watch_store == "sqlite").
         poll_max_per_run: Hard cap on how many active watches a single poll run will
-            query. The Amadeus free tier is ~2,000 req/month (~66/day); with one
-            scheduled run/day this default of 60 keeps the whole fleet under budget.
-            Budget math: poll_max_per_run × runs_per_day × 30 must stay < provider quota.
+            query. Amadeus Self-Service free quotas are per-API and vary (~200–10k/mo;
+            confirm the Flight Offers Search figure in your Workspace), so size this to
+            fit. Budget math: poll_max_per_run × runs_per_day × 30 must stay < quota.
+            Default 60 is a placeholder until the real quota is confirmed.
         poll_token: Optional shared secret. If set, POST /api/v1/poll requires a matching
             `X-Poll-Token` header (so a public Cloud Run URL can't be abused to burn quota).
             If unset (local/dev), the endpoint is open.
