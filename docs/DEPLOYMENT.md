@@ -45,8 +45,9 @@ and `https://cheapsawari-api-444653658968.us-central1.run.app` (+ `http://127.0.
 To re-flip env later without a code change: `gcloud run services update cheapsawari-api
 --region us-central1 --project cheapsawari --update-env-vars "KEY=VALUE,..."`.
 
-> **Current revision:** `cheapsawari-api-00005-dsk` — Slices 6 (Google auth + admin allowlist)
-> and 7 (round-trip + date flexibility), live Travelpayouts fares, deployed 2026-06-24.
+> **Current revision:** `cheapsawari-api-00006-xgw` — Slices 6 (Google auth + admin allowlist),
+> 7 (round-trip + date flexibility), and 8 (per-user watch ownership — private per user, admin
+> sees all), live Travelpayouts fares, deployed 2026-06-24.
 
 ## Redeploy
 ```bash
