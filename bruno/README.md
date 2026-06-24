@@ -16,25 +16,38 @@ This directory contains Bruno collections for continuous API validation and cont
   - `poll/` — the quota-capped poll engine (`POST /api/v1/poll`): token guard (401),
     a run that records snapshots for active watches, and self-cleanup. Needs the server
     started with `POLL_TOKEN` matching `pollToken` in `environments/local.bru`.
+  - `auth/` (Slice 6) — the Google-auth gate + admin allowlist. Runs **first**
+    (alphabetically) and seeds the session the rest of the collection relies on: a
+    no-session 401, dev login as owner, allowlist add/list/revoke, owner-vs-invitee
+    gating (403), and a non-allowlisted refusal. Needs the server started with
+    `AUTH_MODE=dev` and `ADMIN_EMAIL` matching `adminEmail` in `environments/local.bru`.
 
 ## Running the gate
-The suite runs against the **mock** provider, so it never spends the Amadeus quota.
+The suite runs against the **mock** provider, so it never spends the fare-API quota.
+Since Slice 6 the API is auth-gated, so run the **whole collection in one pass** (not a
+single folder): Bruno's per-run cookie jar carries the session the `auth/` folder
+establishes to every protected folder.
 
 ```bash
-# 1. Start the API on the cheapsawari dev port (8050), mock provider:
-FARE_PROVIDER=mock python -m uvicorn src.main:app --port 8050
+# 1. Start the API on the cheapsawari dev port (8050): mock provider, dev auth, throwaway DB.
+AUTH_MODE=dev ADMIN_EMAIL=mpatel.mi24@gmail.com SESSION_SECRET=test-secret \
+  FARE_PROVIDER=mock SQLITE_PATH=.gate.db POLL_TOKEN=test-poll-token \
+  python -m uvicorn src.main:app --port 8050
 
-# 2. In another shell, run the collection:
-cd bruno/cheapsawari && bru run offers --env local
+# 2. In another shell, run the full collection (auth/ runs first and seeds the session):
+cd bruno/cheapsawari && bru run --env local
 ```
 
 ## Current status
-**24 requests / 67 assertions, all passing.**
+**55 requests / 136 assertions, all passing.**
+- `auth/` (Slice 6) — no-session 401, dev login (owner), allowlist add/list/revoke,
+  owner-vs-invitee gating (403), non-allowlisted refusal, public auth-config.
 - `offers/` (Slice 1) — liveness + active provider, the deterministic Offer contract,
   lower-case IATA normalization, cabin pass-through, and the 404 / 400 / 422 error envelope.
 - `watches/` (Slice 2) — full watch lifecycle (create → get → list → refresh ×2 →
   snapshots → delete → confirm-deleted), plus 404 / 400 guards.
 - `poll/` (Slice 3a) — token guard (401), quota-capped poll run records snapshots, cleanup.
+- `signal/` (Slice 4) + `dashboard/` (Slice 5) — reopened-bucket detection and the SPA route.
 
-Run against a throwaway DB so your dev store stays clean, e.g.
-`SQLITE_PATH=.gate.db POLL_TOKEN=test-poll-token python -m uvicorn src.main:app --port 8050`.
+> Note: individual protected folders (`bru run watches`) now 401 on their own — they need
+> the session from `auth/`. Run the full collection, or prepend a dev login.

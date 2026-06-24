@@ -65,6 +65,20 @@ class Settings(BaseModel):
     alert_webhook_url: str | None = None
     signal_threshold_pct: float = 15.0
     signal_window_days: int = 7
+    # --- Slice 6: auth + admin (Google Identity Services) ---
+    # auth_mode: "google" (prod; "Sign in with Google", verifies the Google ID token) or
+    #   "dev" (local/tests; a passwordless email login so the gate is exercisable without
+    #   a real OAuth client). The dev login endpoint is hard-disabled unless auth_mode=="dev".
+    # google_client_id: OAuth 2.0 Web client id; the audience the ID token is verified against
+    #   (required when auth_mode=="google").
+    # admin_email: the bootstrap owner — always allowed and the only account that can manage
+    #   the allowlist. Stored/compared lower-cased.
+    # session_secret: signing key for the HttpOnly session cookie (Starlette SessionMiddleware).
+    #   MUST be set to a stable random value in prod or sessions break across instances/restarts.
+    auth_mode: str = "dev"
+    google_client_id: str | None = None
+    admin_email: str = "mpatel.mi24@gmail.com"
+    session_secret: str = "dev-insecure-session-secret-change-me"
 
 
 @lru_cache(maxsize=1)
@@ -89,4 +103,8 @@ def get_settings() -> Settings:
         alert_webhook_url=os.getenv("ALERT_WEBHOOK_URL") or None,
         signal_threshold_pct=float(os.getenv("SIGNAL_THRESHOLD_PCT", "15.0")),
         signal_window_days=int(os.getenv("SIGNAL_WINDOW_DAYS", "7")),
+        auth_mode=os.getenv("AUTH_MODE", "dev").strip().lower(),
+        google_client_id=os.getenv("GOOGLE_CLIENT_ID") or None,
+        admin_email=os.getenv("ADMIN_EMAIL", "mpatel.mi24@gmail.com").strip().lower(),
+        session_secret=os.getenv("SESSION_SECRET", "dev-insecure-session-secret-change-me"),
     )

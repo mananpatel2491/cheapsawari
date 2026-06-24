@@ -9,6 +9,9 @@ This document maps frontend UI components to their respective backend API endpoi
 | *(Slice 5 — add-watch form, TBD)* | Register / list / delete a tracked route | `POST` `GET` `DELETE /api/v1/watches` → `src/store` `WatchRepository` | `bruno/cheapsawari/watches/create_watch.bru` |
 | *(Slice 5 — dashboard, TBD)* | Poll a watch now / show price history | `POST .../{id}/refresh`, `GET .../{id}/snapshots` → `WatchRepository.add_snapshot` / `list_snapshots` | `bruno/cheapsawari/watches/refresh_watch.bru`, `.../list_snapshots.bru` |
 | Cloud Scheduler `cheapsawari-daily-poll` (LIVE) | Poll all active watches daily (quota-capped) | `POST /api/v1/poll` → `src/poll` `poll_active_watches` → `src/store/firestore_store.py` | `bruno/cheapsawari/poll/poll_run.bru` |
+| `web/login.html` (Slice 6) | Read sign-in mode; sign in (Google ID token or dev email) | `GET /api/v1/auth/config`, `POST /api/v1/auth/google` \| `/auth/dev` → `src/auth` `verify_google_credential` / `login_session` | `bruno/cheapsawari/auth/dev_login_admin.bru`, `.../auth_config_public.bru` |
+| `web/dashboard.html` + `web/admin.html` (Slice 6) | Show signed-in user; sign out | `GET /api/v1/auth/me`, `POST /api/v1/auth/logout` → `src/auth` `require_user` / `logout_session` | `bruno/cheapsawari/auth/me_admin.bru`, `.../logout_owner.bru` |
+| `web/admin.html` (Slice 6) | Owner manages the access allowlist | `GET` `POST /api/v1/admin/users`, `DELETE /api/v1/admin/users/{email}` → `src/users` `AllowedUserRepository` (owner-gated by `require_admin`) | `bruno/cheapsawari/auth/admin_add_user.bru`, `.../admin_list_users.bru`, `.../admin_delete_user.bru` |
 
 ## Maintenance Rules
 1. **Add**: When creating a new endpoint or component connection.

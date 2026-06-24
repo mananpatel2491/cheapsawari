@@ -1,0 +1,17 @@
+meta {
+  name: Admin · invited user is forbidden from admin (403)
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/users
+}
+
+docs {
+  The admin API is owner-only: a signed-in non-admin gets 403, not 401.
+}
+
+assert {
+  res.status: eq 403
+}

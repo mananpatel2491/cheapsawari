@@ -10,3 +10,7 @@ pydantic
 
 # --- cheapsawari cloud store (Slice 3b: Firestore) ---
 google-cloud-firestore
+
+# --- cheapsawari auth + admin (Slice 6: Google Identity Services) ---
+google-auth          # verifies Google ID tokens (offline JWT signature + audience check)
+itsdangerous         # signs the Starlette SessionMiddleware cookie

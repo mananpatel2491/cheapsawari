@@ -1,0 +1,28 @@
+meta {
+  name: Auth · dev login as owner
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/dev
+  body: json
+}
+
+body:json {
+  {
+    "email": "{{adminEmail}}"
+  }
+}
+
+docs {
+  Dev-mode passwordless login (AUTH_MODE=dev). The configured ADMIN_EMAIL is always
+  allowed and resolves to is_admin=true. Sets the session cookie reused by the rest
+  of the run (Bruno's cookie jar carries it to subsequent requests/folders).
+}
+
+assert {
+  res.status: eq 200
+  res.body.email: eq {{adminEmail}}
+  res.body.is_admin: eq true
+}

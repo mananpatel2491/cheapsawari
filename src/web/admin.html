@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin · cheapsawari</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a2129; --line: #2a3441; --text: #e6edf3;
+    --muted: #8b98a5; --accent: #4cc9f0; --bad: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+  header {
+    padding: 20px 24px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  }
+  header h1 { margin: 0; font-size: 20px; letter-spacing: .5px; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  header .spacer { flex: 1; }
+  a { color: var(--accent); text-decoration: none; }
+  main { padding: 24px; max-width: 760px; margin: 0 auto; }
+  .add {
+    display: flex; gap: 8px; align-items: end; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px; margin-bottom: 22px;
+  }
+  .add label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); flex: 1; min-width: 220px; }
+  .add input {
+    background: var(--bg); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 9px 10px; font: inherit;
+  }
+  button {
+    background: var(--accent); color: #03242e; border: 0; border-radius: 6px;
+    padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .owner { color: var(--accent); }
+  .muted { color: var(--muted); font-size: 13px; }
+  .msg { margin: 12px 0; font-size: 13px; min-height: 18px; }
+  .msg.bad { color: var(--bad); }
+  .empty { color: var(--muted); padding: 24px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>✈️ cheapsawari · admin</h1>
+  <span class="sub">access allowlist</span>
+  <span class="spacer"></span>
+  <a href="/">← dashboard</a>
+  <a href="#" id="logout">sign out</a>
+</header>
+<main>
+  <div id="who" class="muted"></div>
+  <form class="add" id="addForm">
+    <label>Grant access to a Google account
+      <input id="email" type="email" placeholder="friend@gmail.com" autocomplete="off" required>
+    </label>
+    <button type="submit">+ Add user</button>
+  </form>
+  <div id="msg" class="msg"></div>
+  <table>
+    <thead><tr><th>Email</th><th>Added by</th><th>Added</th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div id="status"></div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const msg = (t, bad) => { const m = $("msg"); m.textContent = t || ""; m.className = "msg" + (bad ? " bad" : ""); };
+let ME = null;
+
+async function jget(url) { const r = await fetch(url); if (!r.ok) throw r; return r.json(); }
+
+async function guard() {
+  try { ME = await jget("/api/v1/auth/me"); }
+  catch { location.href = "/login"; throw new Error("redirecting"); }
+  if (!ME.is_admin) {
+    document.body.innerHTML = '<main><div class="empty">403 — admin access only.<br><a href="/">← back to dashboard</a></div></main>';
+    throw new Error("not admin");
+  }
+  $("who").innerHTML = `Signed in as <b>${ME.email}</b> · owner (always has access)`;
+}
+
+function row(u) {
+  const when = new Date(u.added_at).toLocaleDateString();
+  return `<tr data-email="${u.email}">
+    <td>${u.email}</td><td class="muted">${u.added_by}</td><td class="muted">${when}</td>
+    <td style="text-align:right"><button class="ghost del">Revoke</button></td>
+  </tr>`;
+}
+
+async function load() {
+  const users = await jget("/api/v1/admin/users");
+  $("rows").innerHTML =
+    `<tr><td class="owner">${ME.email}</td><td class="muted">—</td><td class="muted">owner</td><td></td></tr>` +
+    users.map(row).join("");
+  $("status").innerHTML = users.length ? "" : `<div class="empty">No invited users yet — add a Gmail address above.</div>`;
+}
+
+$("addForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = $("email").value.trim().toLowerCase();
+  const r = await fetch("/api/v1/admin/users", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email }),
+  });
+  if (r.ok) { $("addForm").reset(); msg("Added " + email + "."); load(); }
+  else { let d = "Could not add (" + r.status + ")."; try { d = (await r.json()).detail || d; } catch {} msg(d, true); }
+});
+
+$("rows").addEventListener("click", async (e) => {
+  if (!e.target.classList.contains("del")) return;
+  const email = e.target.closest("tr").dataset.email;
+  if (!confirm("Revoke access for " + email + "?")) return;
+  const r = await fetch("/api/v1/admin/users/" + encodeURIComponent(email), { method: "DELETE" });
+  if (r.ok) { msg("Revoked " + email + "."); load(); }
+  else { msg("Could not revoke (" + r.status + ").", true); }
+});
+
+$("logout").addEventListener("click", async (e) => {
+  e.preventDefault();
+  await fetch("/api/v1/auth/logout", { method: "POST" });
+  location.href = "/login";
+});
+
+(async () => { try { await guard(); await load(); } catch {} })();
+</script>
+</body>
+</html>

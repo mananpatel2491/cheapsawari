@@ -1,0 +1,14 @@
+meta {
+  name: Auth · logout invited user
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/logout
+  body: none
+}
+
+assert {
+  res.status: eq 204
+}

@@ -24,7 +24,30 @@ cheapsawari runs on Google Cloud, project **`cheapsawari`**, region **`us-centra
 - `ALERT_CHANNEL=log` (Slice 4) — alerts go to Cloud Run logs (zero-cost, prod-safe). To
   deliver outbound, set `ALERT_CHANNEL=webhook` + `ALERT_WEBHOOK_URL=<slack/discord/generic hook>`.
 
+### Auth (Slice 6) — pending owner step to go live
+The app is gated by Google sign-in + an admin-managed allowlist. The **code is deployed-ready
+and verified locally in `AUTH_MODE=dev`**, but prod still runs the pre-auth revision until you
+create a Google OAuth client and flip the env. Until then, do **not** set `AUTH_MODE=google`
+without `GOOGLE_CLIENT_ID`, or sign-in will be unusable.
+
+Owner one-time setup to enable real Google sign-in:
+1. GCP console → **APIs & Services → Credentials → Create credentials → OAuth client ID →
+   Web application**. Under **Authorized JavaScript origins** add the Cloud Run URL
+   (`https://cheapsawari-api-444653658968.us-central1.run.app`) and `http://127.0.0.1:8050`
+   for local. (No redirect URI needed — GIS returns the token to the page.) Copy the **Client ID**.
+2. Generate a stable session secret: `python -c "import secrets;print(secrets.token_urlsafe(32))"`.
+3. Redeploy with the auth env (merges, preserving existing secrets):
+   ```bash
+   gcloud run services update cheapsawari-api --region us-central1 --project cheapsawari \
+     --update-env-vars "AUTH_MODE=google,GOOGLE_CLIENT_ID=<client-id>,SESSION_SECRET=<secret>,ADMIN_EMAIL=mpatel.mi24@gmail.com"
+   ```
+   `ADMIN_EMAIL` is the bootstrap owner (always allowed; the only account that can manage the
+   allowlist at `/admin`). `SESSION_SECRET` MUST stay stable or live sessions invalidate on each
+   deploy/instance. The Firestore `allowed_users/{email}` collection holds invited users — no
+   schema/index step needed (it's created on first add).
+
 > **Current revision:** `cheapsawari-api-00004-kht` (live Travelpayouts fares), deployed 2026-06-24.
+> Auth (Slice 6) is built + gate-green but **not yet flipped on in prod** — see the owner step above.
 
 ## Redeploy
 ```bash

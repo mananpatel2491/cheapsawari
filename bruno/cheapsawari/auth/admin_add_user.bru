@@ -1,0 +1,28 @@
+meta {
+  name: Admin · add a user to the allowlist
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/users
+  body: json
+}
+
+body:json {
+  {
+    "email": "{{inviteEmail}}"
+  }
+}
+
+docs {
+  The owner grants a Gmail address access. Returns the persisted AllowedUser with the
+  granting admin recorded in added_by.
+}
+
+assert {
+  res.status: eq 201
+  res.body.email: eq {{inviteEmail}}
+  res.body.added_by: eq {{adminEmail}}
+  res.body.added_at: isString
+}

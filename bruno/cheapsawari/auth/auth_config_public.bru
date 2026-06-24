@@ -1,0 +1,20 @@
+meta {
+  name: Auth · config endpoint is public
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{baseUrl}}/api/v1/auth/config
+}
+
+docs {
+  The login page reads this (unauthenticated) to decide which control to render. It
+  exposes only the mode and the public OAuth client id — never a secret. In the gate
+  the server runs AUTH_MODE=dev.
+}
+
+assert {
+  res.status: eq 200
+  res.body.mode: eq dev
+}

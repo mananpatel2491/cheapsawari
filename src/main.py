@@ -12,39 +12,82 @@ from datetime import date as _date
 from datetime import datetime, timezone
 from pathlib import Path as _Path
 
-from fastapi import FastAPI, Header, HTTPException, Path, Query
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Path, Query, Request
+from fastapi.responses import FileResponse, RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
 
+from . import auth
 from .alerts import get_alert_channel
 from .config import get_settings
-from .models import Offer, PriceSnapshot, RefreshResult, SnapshotCreate, Watch, WatchCreate
+from .models import (
+    AddUserRequest,
+    AllowedUser,
+    Offer,
+    PriceSnapshot,
+    RefreshResult,
+    SessionUser,
+    SnapshotCreate,
+    Watch,
+    WatchCreate,
+)
 from .poll import PollSummary, poll_active_watches
 from .providers import ProviderError, get_provider
 from .signal import SignalResult, detect_reopening
 from .store import WatchNotFoundError, get_repository
+from .users import get_user_repository
 
 app = FastAPI(
     title="cheapsawari API",
-    version="0.1.0",
+    version="0.2.0",
     description="Air flight fare-bucket booking tracker.",
+)
+
+# Signs an HttpOnly session cookie (Slice 6 auth). The secret must be stable across
+# instances/restarts in prod (set SESSION_SECRET) or sessions silently invalidate.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=get_settings().session_secret,
+    https_only=False,  # Cloud Run terminates TLS at the proxy; the app sees http internally.
+    same_site="lax",
 )
 
 # IATA codes are exactly 3 letters. Enforce at the edge so providers can trust input.
 _IATA = r"^[A-Za-z]{3}$"
 
-# Single-page dashboard (Slice 5), served from the same app — no separate frontend
-# build or hosting, so the whole product stays one $0 Cloud Run service.
-_DASHBOARD = _Path(__file__).parent / "web" / "dashboard.html"
+# Single-page UI (Slice 5/6), served from the same app — no separate frontend build
+# or hosting, so the whole product stays one $0 Cloud Run service.
+_WEB = _Path(__file__).parent / "web"
+_DASHBOARD = _WEB / "dashboard.html"
+_LOGIN = _WEB / "login.html"
+_ADMIN = _WEB / "admin.html"
 
 
-@app.get("/", include_in_schema=False)
-def dashboard() -> FileResponse:
+@app.get("/", include_in_schema=False, response_model=None)
+def dashboard(request: Request) -> FileResponse | RedirectResponse:
     """Minimal dashboard: watches, price-history sparklines, and signal badges.
 
-    Static HTML + vanilla JS that calls the JSON API from the same origin. Kept
-    out of the OpenAPI schema since it's a UI page, not a contract endpoint.
+    Gated (Slice 6): unauthenticated visitors are redirected to the login page so the
+    landing URL never leaks tracked routes. Static HTML + vanilla JS that calls the
+    JSON API from the same origin. Out of the OpenAPI schema — it's a UI page.
     """
+    if auth.current_user(request) is None:
+        return RedirectResponse("/login", status_code=302)
     return FileResponse(_DASHBOARD, media_type="text/html")
+
+
+@app.get("/login", include_in_schema=False)
+def login_page() -> FileResponse:
+    """Sign-in page. Renders "Sign in with Google" (or a dev email form in AUTH_MODE=dev)."""
+    return FileResponse(_LOGIN, media_type="text/html")
+
+
+@app.get("/admin", include_in_schema=False, response_model=None)
+def admin_page(request: Request) -> FileResponse | RedirectResponse:
+    """Admin console (allowlist management). Redirects non-signed-in visitors to login;
+    the page itself enforces admin-only via /api/v1/auth/me and the admin API returns 403."""
+    if auth.current_user(request) is None:
+        return RedirectResponse("/login", status_code=302)
+    return FileResponse(_ADMIN, media_type="text/html")
 
 
 @app.get("/health", tags=["meta"])
@@ -53,7 +96,103 @@ def health() -> dict:
     return {"status": "ok", "provider": get_settings().fare_provider}
 
 
-@app.get("/api/v1/offers/cheapest", response_model=Offer, tags=["offers"])
+# --- Slice 6: auth + admin -------------------------------------------------
+
+@app.get("/api/v1/auth/config", tags=["auth"])
+def auth_config() -> dict:
+    """Public: what the login page needs to render the right control (no secrets)."""
+    settings = get_settings()
+    return {"mode": settings.auth_mode, "google_client_id": settings.google_client_id}
+
+
+@app.get("/api/v1/auth/me", response_model=SessionUser, tags=["auth"])
+def auth_me(user: SessionUser = Depends(auth.require_user)) -> SessionUser:
+    """Return the signed-in user (email + is_admin). 401 if not authenticated/allowed."""
+    return user
+
+
+@app.post("/api/v1/auth/google", response_model=SessionUser, tags=["auth"])
+def auth_google(request: Request, body: dict) -> SessionUser:
+    """Verify a Google ID token, check the allowlist, and open a session.
+
+    Body: `{"credential": "<google id token>"}`. 401 if the token is invalid or the
+    account isn't allowed (the admin is always allowed; others must be on the allowlist).
+    """
+    credential = (body or {}).get("credential")
+    if not credential:
+        raise HTTPException(status_code=400, detail="Missing 'credential'.")
+    try:
+        email = auth.verify_google_credential(credential)
+    except auth.AuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    if not auth.is_access_allowed(email):
+        raise HTTPException(status_code=403, detail=f"{email} is not on the allowlist.")
+    auth.login_session(request, email)
+    return SessionUser(email=email, is_admin=auth.is_admin(email))
+
+
+@app.post("/api/v1/auth/dev", response_model=SessionUser, tags=["auth"])
+def auth_dev(request: Request, body: dict) -> SessionUser:
+    """Dev-only passwordless login (AUTH_MODE=dev). 404 in any other mode.
+
+    Lets the gate be exercised locally and by the Bruno suite without a real OAuth client.
+    Still allowlist-gated, so it grants no access the admin hasn't configured.
+    """
+    if get_settings().auth_mode != "dev":
+        raise HTTPException(status_code=404, detail="Not found.")
+    email = ((body or {}).get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="A valid 'email' is required.")
+    if not auth.is_access_allowed(email):
+        raise HTTPException(status_code=403, detail=f"{email} is not on the allowlist.")
+    auth.login_session(request, email)
+    return SessionUser(email=email, is_admin=auth.is_admin(email))
+
+
+@app.post("/api/v1/auth/logout", status_code=204, tags=["auth"])
+def auth_logout(request: Request) -> None:
+    """End the session (clears the cookie)."""
+    auth.logout_session(request)
+
+
+@app.get("/api/v1/admin/users", response_model=list[AllowedUser], tags=["admin"])
+def admin_list_users(_: SessionUser = Depends(auth.require_admin)) -> list[AllowedUser]:
+    """List the allowlist (admin only). The admin owner is implicit and not shown here."""
+    return get_user_repository().list_users()
+
+
+@app.post("/api/v1/admin/users", response_model=AllowedUser, status_code=201, tags=["admin"])
+def admin_add_user(
+    data: AddUserRequest, admin: SessionUser = Depends(auth.require_admin)
+) -> AllowedUser:
+    """Grant a Gmail address access (admin only). Idempotent. 400 on a malformed email."""
+    email = data.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="A valid email is required.")
+    if auth.is_admin(email):
+        raise HTTPException(status_code=400, detail="The owner already has access.")
+    return get_user_repository().add_user(email, added_by=admin.email)
+
+
+@app.delete("/api/v1/admin/users/{email}", status_code=204, tags=["admin"])
+def admin_remove_user(
+    email: str = Path(..., description="Email to revoke."),
+    _: SessionUser = Depends(auth.require_admin),
+) -> None:
+    """Revoke a user's access (admin only). 400 if you try to remove the owner; 404 if unknown."""
+    email = email.strip().lower()
+    if auth.is_admin(email):
+        raise HTTPException(status_code=400, detail="The owner cannot be removed.")
+    if not get_user_repository().remove_user(email):
+        raise HTTPException(status_code=404, detail=f"'{email}' is not on the allowlist.")
+
+
+@app.get(
+    "/api/v1/offers/cheapest",
+    response_model=Offer,
+    tags=["offers"],
+    dependencies=[Depends(auth.require_user)],
+)
 def cheapest_offer(
     origin: str = Query(..., pattern=_IATA, description="Origin IATA code, e.g. JFK."),
     destination: str = Query(..., pattern=_IATA, description="Destination IATA code, e.g. LAX."),
@@ -85,7 +224,13 @@ def cheapest_offer(
 
 # --- Slice 2: watches + persistence ---------------------------------------
 
-@app.post("/api/v1/watches", response_model=Watch, status_code=201, tags=["watches"])
+@app.post(
+    "/api/v1/watches",
+    response_model=Watch,
+    status_code=201,
+    tags=["watches"],
+    dependencies=[Depends(auth.require_user)],
+)
 def create_watch(data: WatchCreate) -> Watch:
     """Register a route+date to track. 400 if origin == destination."""
     if data.origin.upper() == data.destination.upper():
@@ -93,13 +238,23 @@ def create_watch(data: WatchCreate) -> Watch:
     return get_repository().create_watch(data)
 
 
-@app.get("/api/v1/watches", response_model=list[Watch], tags=["watches"])
+@app.get(
+    "/api/v1/watches",
+    response_model=list[Watch],
+    tags=["watches"],
+    dependencies=[Depends(auth.require_user)],
+)
 def list_watches(active_only: bool = Query(False, description="Only return active watches.")) -> list[Watch]:
     """List tracked watches, newest first."""
     return get_repository().list_watches(active_only=active_only)
 
 
-@app.get("/api/v1/watches/{watch_id}", response_model=Watch, tags=["watches"])
+@app.get(
+    "/api/v1/watches/{watch_id}",
+    response_model=Watch,
+    tags=["watches"],
+    dependencies=[Depends(auth.require_user)],
+)
 def get_watch(watch_id: str = Path(..., description="Watch id.")) -> Watch:
     """Fetch a single watch. 404 if unknown."""
     watch = get_repository().get_watch(watch_id)
@@ -108,14 +263,24 @@ def get_watch(watch_id: str = Path(..., description="Watch id.")) -> Watch:
     return watch
 
 
-@app.delete("/api/v1/watches/{watch_id}", status_code=204, tags=["watches"])
+@app.delete(
+    "/api/v1/watches/{watch_id}",
+    status_code=204,
+    tags=["watches"],
+    dependencies=[Depends(auth.require_user)],
+)
 def delete_watch(watch_id: str = Path(..., description="Watch id.")) -> None:
     """Delete a watch and its snapshots. 404 if unknown."""
     if not get_repository().delete_watch(watch_id):
         raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.")
 
 
-@app.post("/api/v1/watches/{watch_id}/refresh", response_model=RefreshResult, tags=["watches"])
+@app.post(
+    "/api/v1/watches/{watch_id}/refresh",
+    response_model=RefreshResult,
+    tags=["watches"],
+    dependencies=[Depends(auth.require_user)],
+)
 def refresh_watch(watch_id: str = Path(..., description="Watch id.")) -> RefreshResult:
     """Poll a watch once via the active provider and store a snapshot.
 
@@ -145,6 +310,7 @@ def refresh_watch(watch_id: str = Path(..., description="Watch id.")) -> Refresh
     "/api/v1/watches/{watch_id}/snapshots",
     response_model=list[PriceSnapshot],
     tags=["watches"],
+    dependencies=[Depends(auth.require_user)],
 )
 def list_snapshots(
     watch_id: str = Path(..., description="Watch id."),
@@ -162,6 +328,7 @@ def list_snapshots(
     response_model=PriceSnapshot,
     status_code=201,
     tags=["watches"],
+    dependencies=[Depends(auth.require_user)],
 )
 def record_snapshot(
     data: SnapshotCreate, watch_id: str = Path(..., description="Watch id.")
@@ -197,6 +364,7 @@ def record_snapshot(
     "/api/v1/watches/{watch_id}/signal",
     response_model=SignalResult,
     tags=["signal"],
+    dependencies=[Depends(auth.require_user)],
 )
 def get_signal(watch_id: str = Path(..., description="Watch id.")) -> SignalResult:
     """Detect a freshly reopened cheaper bucket in a watch's price history.

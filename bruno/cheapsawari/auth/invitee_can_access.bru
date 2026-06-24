@@ -1,0 +1,17 @@
+meta {
+  name: Auth · invited user can use the app
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches
+}
+
+docs {
+  An allowlisted non-admin has full app access (protected route returns 200).
+}
+
+assert {
+  res.status: eq 200
+}

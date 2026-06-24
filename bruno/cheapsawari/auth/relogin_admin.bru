@@ -1,0 +1,26 @@
+meta {
+  name: Auth · sign back in as owner
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/dev
+  body: json
+}
+
+body:json {
+  {
+    "email": "{{adminEmail}}"
+  }
+}
+
+docs {
+  Re-establish the owner session so the cleanup below (and the rest of the collection's
+  protected folders, which share this run's cookie jar) run authenticated.
+}
+
+assert {
+  res.status: eq 200
+  res.body.is_admin: eq true
+}

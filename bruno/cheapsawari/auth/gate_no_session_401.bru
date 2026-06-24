@@ -1,0 +1,19 @@
+meta {
+  name: Auth · protected route rejects no session (401)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches
+}
+
+docs {
+  Slice 6: with auth on, a protected endpoint must reject an unauthenticated caller.
+  Runs first (alphabetically the 'auth' folder leads the collection), before any login,
+  so the cookie jar is empty here.
+}
+
+assert {
+  res.status: eq 401
+}

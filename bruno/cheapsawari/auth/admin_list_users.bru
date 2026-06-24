@@ -1,0 +1,19 @@
+meta {
+  name: Admin · list shows the invited user
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/users
+}
+
+docs {
+  The allowlist now contains the invited user. The owner is implicit and not listed here.
+}
+
+assert {
+  res.status: eq 200
+  res.body[0].email: eq {{inviteEmail}}
+  res.body[0].added_by: eq {{adminEmail}}
+}

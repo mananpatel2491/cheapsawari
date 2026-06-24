@@ -1,0 +1,17 @@
+meta {
+  name: Admin · revoking an unknown user is 404
+  type: http
+  seq: 15
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/admin/users/{{inviteEmail}}
+}
+
+docs {
+  Idempotency edge: deleting a user that is no longer on the allowlist returns 404.
+}
+
+assert {
+  res.status: eq 404
+}

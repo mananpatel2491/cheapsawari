@@ -11,6 +11,7 @@ This document records established engineering patterns and design decisions to e
 *   **Proactive Hardening**: When updating an existing file, the agent must audit the logic for security risks (e.g., injection, leaked secrets) and resource/memory leaks. If found, these must be patched immediately and logic added to prevent reintroduction.
 *   **Production Readiness Gating**: Code containing comments indicating temporary setups, mocks, or non-production quality (e.g., `// TODO: temp`, `// fix later`) must be flagged. The agent must explicitly ask the Director if these should be addressed before proceeding.
 *   **Infrastructure Migration Advisory**: When transitioning from local/mock implementations to production-ready infrastructure, the agent must present a comparative selection of technology options (e.g., for Identity: AWS Cognito, Azure AD, Auth0) and seek the Director's arbitration before implementation.
+    *   **Resolved — Identity (Slice 6, 2026-06-24):** Director chose **Google Identity Services + signed session cookie + Firestore allowlist** (over Firebase Auth and Cloud IAP) to keep the single $0 Cloud Run service. A `dev`/`google` mode split keeps the gate locally testable. Do not re-litigate; extend this stack for future access needs.
 
 ## 2. Coding Standards
 *   **CLI Argument Parsing**: Use the standard `argparse` library for all scripts to provide a consistent interface for flags and help menus.

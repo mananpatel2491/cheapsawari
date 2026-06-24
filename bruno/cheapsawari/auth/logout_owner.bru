@@ -1,0 +1,19 @@
+meta {
+  name: Auth · logout owner
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/logout
+  body: none
+}
+
+docs {
+  Ends the owner session so we can log in as the invited (non-admin) user next and
+  prove the admin gate distinguishes the two.
+}
+
+assert {
+  res.status: eq 204
+}

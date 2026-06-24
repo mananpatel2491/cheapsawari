@@ -104,3 +104,26 @@ class SnapshotCreate(BaseModel):
     observed_at: datetime | None = Field(
         None, description="When it was observed (UTC). Defaults to now; set it for backfill."
     )
+
+
+# --- Slice 6: auth + admin -------------------------------------------------
+
+class AddUserRequest(BaseModel):
+    """Admin input for granting a Gmail address access to the app."""
+
+    email: str = Field(..., description="The Google account email to allow (stored lower-cased).")
+
+
+class AllowedUser(BaseModel):
+    """A persisted allowlist entry — one Google account permitted to use the app."""
+
+    email: str = Field(..., description="Google account email (lower-cased), the primary key.")
+    added_by: str = Field(..., description="Email of the admin who granted access.")
+    added_at: datetime = Field(..., description="UTC timestamp access was granted.")
+
+
+class SessionUser(BaseModel):
+    """The authenticated caller resolved from the signed session cookie."""
+
+    email: str = Field(..., description="Signed-in Google account email.")
+    is_admin: bool = Field(..., description="True when email == the configured ADMIN_EMAIL.")

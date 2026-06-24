@@ -1,0 +1,17 @@
+meta {
+  name: Admin · revoke the invited user
+  type: http
+  seq: 14
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/admin/users/{{inviteEmail}}
+}
+
+docs {
+  Revoking access removes the allowlist row (204). Leaves the store clean for re-runs.
+}
+
+assert {
+  res.status: eq 204
+}
