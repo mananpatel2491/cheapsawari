@@ -2,12 +2,44 @@
 from __future__ import annotations
 
 import abc
+import uuid
+from datetime import date as _date
 
 from ..models import Offer, PriceSnapshot, Watch, WatchCreate
 
 
 class WatchNotFoundError(LookupError):
     """Raised when an operation targets a watch id that does not exist."""
+
+
+def build_snapshot(
+    watch_id: str,
+    offer: Offer,
+    *,
+    total: float | None = None,
+    outbound_date: _date | None = None,
+    return_offer: Offer | None = None,
+) -> PriceSnapshot:
+    """Assemble a :class:`PriceSnapshot` from an outbound offer (+ optional return).
+
+    Shared by every store so the one-way ↔ round-trip mapping lives in one place.
+    ``price`` is the trip total; the outbound offer supplies the descriptive fields.
+    """
+    return PriceSnapshot(
+        id=str(uuid.uuid4()),
+        watch_id=watch_id,
+        price=total if total is not None else offer.price,
+        currency=offer.currency,
+        cabin=offer.cabin,
+        fare_basis=offer.fare_basis,
+        carrier=offer.carrier,
+        provider=offer.provider,
+        observed_at=offer.observed_at,
+        outbound_price=offer.price,
+        outbound_date=outbound_date or offer.departure_date,
+        return_price=return_offer.price if return_offer else None,
+        return_date=return_offer.departure_date if return_offer else None,
+    )
 
 
 class WatchRepository(abc.ABC):
@@ -34,8 +66,22 @@ class WatchRepository(abc.ABC):
         """Delete a watch (and cascade its snapshots). True if it existed."""
 
     @abc.abstractmethod
-    def add_snapshot(self, watch_id: str, offer: Offer) -> PriceSnapshot:
-        """Record an observed offer as a snapshot for the watch.
+    def add_snapshot(
+        self,
+        watch_id: str,
+        offer: Offer,
+        *,
+        total: float | None = None,
+        outbound_date=None,
+        return_offer: Offer | None = None,
+    ) -> PriceSnapshot:
+        """Record an observed trip as a snapshot for the watch.
+
+        ``offer`` is the outbound leg (its fields describe the snapshot's
+        currency/cabin/fare_basis/carrier/provider/observed_at). For a round trip pass
+        ``return_offer`` and the ``total`` (outbound+return); both default to a one-way
+        snapshot (total = outbound price). ``outbound_date`` records which flexible date
+        was cheapest (defaults to the offer's departure_date).
 
         Raises:
             WatchNotFoundError: If the watch does not exist.

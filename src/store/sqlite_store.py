@@ -15,7 +15,7 @@ from datetime import date as _date
 from datetime import datetime, timezone
 
 from ..models import Offer, PriceSnapshot, Watch, WatchCreate
-from .base import WatchNotFoundError, WatchRepository
+from .base import WatchNotFoundError, WatchRepository, build_snapshot
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS watches (
@@ -25,7 +25,11 @@ CREATE TABLE IF NOT EXISTS watches (
     departure_date TEXT NOT NULL,
     cabin          TEXT NOT NULL,
     active         INTEGER NOT NULL DEFAULT 1,
-    created_at     TEXT NOT NULL
+    created_at     TEXT NOT NULL,
+    trip_type        TEXT NOT NULL DEFAULT 'one_way',
+    return_date      TEXT,
+    depart_flex_days INTEGER NOT NULL DEFAULT 0,
+    return_flex_days INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS snapshots (
     id          TEXT PRIMARY KEY,
@@ -37,10 +41,32 @@ CREATE TABLE IF NOT EXISTS snapshots (
     carrier     TEXT,
     provider    TEXT NOT NULL,
     observed_at TEXT NOT NULL,
+    outbound_price REAL,
+    outbound_date  TEXT,
+    return_price   REAL,
+    return_date    TEXT,
     FOREIGN KEY (watch_id) REFERENCES watches(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_snapshots_watch ON snapshots(watch_id, observed_at);
 """
+
+# Slice 7 added columns; ADD them to pre-existing tables (SQLite has no ADD COLUMN
+# IF NOT EXISTS, so we diff against pragma table_info). Each is nullable / has a
+# default, so existing rows migrate cleanly.
+_MIGRATIONS = {
+    "watches": [
+        ("trip_type", "TEXT NOT NULL DEFAULT 'one_way'"),
+        ("return_date", "TEXT"),
+        ("depart_flex_days", "INTEGER NOT NULL DEFAULT 0"),
+        ("return_flex_days", "INTEGER NOT NULL DEFAULT 0"),
+    ],
+    "snapshots": [
+        ("outbound_price", "REAL"),
+        ("outbound_date", "TEXT"),
+        ("return_price", "REAL"),
+        ("return_date", "TEXT"),
+    ],
+}
 
 
 def _now() -> datetime:
@@ -52,6 +78,16 @@ class SqliteWatchRepository(WatchRepository):
         self._path = path
         with self._conn() as conn:
             conn.executescript(_SCHEMA)
+            self._migrate(conn)
+
+    @staticmethod
+    def _migrate(conn) -> None:
+        """Bring a pre-Slice-7 table up to date by adding any missing columns."""
+        for table, columns in _MIGRATIONS.items():
+            existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+            for name, ddl in columns:
+                if name not in existing:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
 
     @contextmanager
     def _conn(self):
@@ -75,6 +111,10 @@ class SqliteWatchRepository(WatchRepository):
             cabin=row["cabin"],
             active=bool(row["active"]),
             created_at=datetime.fromisoformat(row["created_at"]),
+            trip_type=row["trip_type"],
+            return_date=_date.fromisoformat(row["return_date"]) if row["return_date"] else None,
+            depart_flex_days=row["depart_flex_days"],
+            return_flex_days=row["return_flex_days"],
         )
 
     @staticmethod
@@ -89,6 +129,10 @@ class SqliteWatchRepository(WatchRepository):
             carrier=row["carrier"],
             provider=row["provider"],
             observed_at=datetime.fromisoformat(row["observed_at"]),
+            outbound_price=row["outbound_price"],
+            outbound_date=_date.fromisoformat(row["outbound_date"]) if row["outbound_date"] else None,
+            return_price=row["return_price"],
+            return_date=_date.fromisoformat(row["return_date"]) if row["return_date"] else None,
         )
 
     # --- watches ------------------------------------------------------------
@@ -101,11 +145,16 @@ class SqliteWatchRepository(WatchRepository):
             cabin=data.cabin.upper(),
             active=True,
             created_at=_now(),
+            trip_type=data.trip_type,
+            return_date=data.return_date,
+            depart_flex_days=data.depart_flex_days,
+            return_flex_days=data.return_flex_days,
         )
         with self._conn() as conn:
             conn.execute(
-                "INSERT INTO watches (id, origin, destination, departure_date, cabin, active, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO watches (id, origin, destination, departure_date, cabin, active, "
+                "created_at, trip_type, return_date, depart_flex_days, return_flex_days) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     watch.id,
                     watch.origin,
@@ -114,6 +163,10 @@ class SqliteWatchRepository(WatchRepository):
                     watch.cabin,
                     int(watch.active),
                     watch.created_at.isoformat(),
+                    watch.trip_type,
+                    watch.return_date.isoformat() if watch.return_date else None,
+                    watch.depart_flex_days,
+                    watch.return_flex_days,
                 ),
             )
         return watch
@@ -138,24 +191,25 @@ class SqliteWatchRepository(WatchRepository):
         return cur.rowcount > 0
 
     # --- snapshots ----------------------------------------------------------
-    def add_snapshot(self, watch_id: str, offer: Offer) -> PriceSnapshot:
+    def add_snapshot(
+        self,
+        watch_id: str,
+        offer: Offer,
+        *,
+        total: float | None = None,
+        outbound_date=None,
+        return_offer: Offer | None = None,
+    ) -> PriceSnapshot:
         if self.get_watch(watch_id) is None:
             raise WatchNotFoundError(watch_id)
-        snap = PriceSnapshot(
-            id=str(uuid.uuid4()),
-            watch_id=watch_id,
-            price=offer.price,
-            currency=offer.currency,
-            cabin=offer.cabin,
-            fare_basis=offer.fare_basis,
-            carrier=offer.carrier,
-            provider=offer.provider,
-            observed_at=offer.observed_at,
+        snap = build_snapshot(
+            watch_id, offer, total=total, outbound_date=outbound_date, return_offer=return_offer
         )
         with self._conn() as conn:
             conn.execute(
-                "INSERT INTO snapshots (id, watch_id, price, currency, cabin, fare_basis, carrier, provider, observed_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO snapshots (id, watch_id, price, currency, cabin, fare_basis, carrier, "
+                "provider, observed_at, outbound_price, outbound_date, return_price, return_date) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     snap.id,
                     snap.watch_id,
@@ -166,6 +220,10 @@ class SqliteWatchRepository(WatchRepository):
                     snap.carrier,
                     snap.provider,
                     snap.observed_at.isoformat(),
+                    snap.outbound_price,
+                    snap.outbound_date.isoformat() if snap.outbound_date else None,
+                    snap.return_price,
+                    snap.return_date.isoformat() if snap.return_date else None,
                 ),
             )
         return snap

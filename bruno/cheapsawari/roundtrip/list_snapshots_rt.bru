@@ -1,0 +1,21 @@
+meta {
+  name: Round-trip · snapshot carries the leg breakdown
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches/{{rtId}}/snapshots
+}
+
+docs {
+  The persisted snapshot exposes the per-leg fields so the dashboard can show the
+  outbound/return dates and prices behind the trip total.
+}
+
+assert {
+  res.status: eq 200
+  res.body[0].return_price: isNumber
+  res.body[0].outbound_price: isNumber
+  res.body[0].return_date: isString
+}

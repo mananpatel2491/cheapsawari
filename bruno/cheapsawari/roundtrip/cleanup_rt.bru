@@ -1,0 +1,13 @@
+meta {
+  name: Round-trip · cleanup round-trip watch
+  type: http
+  seq: 8
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/watches/{{rtId}}
+}
+
+assert {
+  res.status: eq 204
+}

@@ -1,0 +1,35 @@
+meta {
+  name: One-way · flexible departure window
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "origin": "sfo",
+    "destination": "ord",
+    "departure_date": "2026-10-01",
+    "depart_flex_days": 5
+  }
+}
+
+vars:post-response {
+  owId: res.body.id
+}
+
+docs {
+  Flexibility also applies to a one-way trip: the watch tracks the cheapest day in a
+  6-day window. trip_type defaults to one_way; return fields stay empty.
+}
+
+assert {
+  res.status: eq 201
+  res.body.trip_type: eq one_way
+  res.body.depart_flex_days: eq 5
+  res.body.return_date: isNull
+}

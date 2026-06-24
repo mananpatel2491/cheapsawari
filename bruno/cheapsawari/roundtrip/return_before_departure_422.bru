@@ -1,0 +1,28 @@
+meta {
+  name: Round-trip · return before departure is rejected (422)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "origin": "dtw",
+    "destination": "amd",
+    "departure_date": "2026-12-08",
+    "trip_type": "round_trip",
+    "return_date": "2026-12-01"
+  }
+}
+
+docs {
+  The return leg cannot precede the outbound leg — 422.
+}
+
+assert {
+  res.status: eq 422
+}

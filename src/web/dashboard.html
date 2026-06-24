@@ -45,6 +45,14 @@
     padding: 16px; display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: center;
   }
   .route { font-size: 18px; font-weight: 600; }
+  .route .tag {
+    font-size: 11px; font-weight: 600; color: var(--accent); vertical-align: middle;
+    border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin-left: 6px;
+  }
+  .legs {
+    grid-column: 1 / -1; display: flex; gap: 18px; flex-wrap: wrap;
+    color: var(--muted); font-size: 12.5px;
+  }
   .meta { color: var(--muted); font-size: 13px; }
   .price { font-size: 22px; font-weight: 700; text-align: right; }
   .price small { font-size: 13px; color: var(--muted); font-weight: 500; }
@@ -76,9 +84,18 @@
 </header>
 <main>
   <form class="add" id="addForm">
-    <label>Origin<input id="origin" maxlength="3" placeholder="JFK" required></label>
-    <label>Destination<input id="destination" maxlength="3" placeholder="LAX" required></label>
+    <label>Trip
+      <select id="tripType">
+        <option value="one_way">One-way</option>
+        <option value="round_trip">Round-trip</option>
+      </select>
+    </label>
+    <label>Origin<input id="origin" maxlength="3" placeholder="DTW" required></label>
+    <label>Destination<input id="destination" maxlength="3" placeholder="AMD" required></label>
     <label>Departure<input id="date" type="date" required></label>
+    <label>± days<input id="departFlex" type="number" min="0" max="21" value="0" title="Also search this many days after the departure date"></label>
+    <label class="rt" hidden>Return<input id="returnDate" type="date"></label>
+    <label class="rt" hidden>± days<input id="returnFlex" type="number" min="0" max="21" value="0" title="Also search this many days after the return date"></label>
     <label>Cabin
       <select id="cabin">
         <option>ECONOMY</option><option>PREMIUM_ECONOMY</option>
@@ -139,17 +156,35 @@ function badge(signal, hasData) {
   return `<span class="badge nodata">no data yet</span>`;
 }
 
+// Format a leg's anchor date with its flexibility window, e.g. "2026-12-08 (+6d)".
+const flexLabel = (d, flex) => d + (flex > 0 ? ` (+${flex}d)` : "");
+
+// Round-trip price breakdown from the latest snapshot (outbound + return legs).
+function legsLine(w, latest) {
+  if (w.trip_type !== "round_trip" || !latest || latest.return_price == null) return "";
+  return `<div class="legs">
+    <span>↗ out ${latest.outbound_date} · ${fmt(latest.outbound_price)}</span>
+    <span>↘ ret ${latest.return_date} · ${fmt(latest.return_price)}</span>
+  </div>`;
+}
+
 function card(w, snaps, signal) {
   // snapshots arrive newest-first; chronological for the sparkline.
   const chrono = [...snaps].reverse();
   const prices = chrono.map((s) => s.price);
   const latest = snaps.length ? snaps[0] : null;
+  const rt = w.trip_type === "round_trip";
+  const arrow = rt ? "⇄" : "→";
+  const dates = rt
+    ? `${flexLabel(w.departure_date, w.depart_flex_days)} ${arrow} ${flexLabel(w.return_date, w.return_flex_days)}`
+    : flexLabel(w.departure_date, w.depart_flex_days);
   return `<div class="card" data-id="${w.id}">
     <div>
-      <div class="route">${w.origin} → ${w.destination}</div>
-      <div class="meta">${w.departure_date} · ${w.cabin}${w.active ? "" : " · paused"}</div>
+      <div class="route">${w.origin} ${arrow} ${w.destination} ${rt ? '<span class="tag">round-trip</span>' : ""}</div>
+      <div class="meta">${dates} · ${w.cabin}${w.active ? "" : " · paused"}</div>
     </div>
     <div class="price">${latest ? fmt(latest.price) : "—"}<small>${latest ? " " + latest.currency : ""}</small></div>
+    ${legsLine(w, latest)}
     ${sparkline(prices)}
     <div class="row2">
       ${badge(signal, snaps.length > 0)}
@@ -186,20 +221,39 @@ async function load() {
   }
 }
 
+// Show/hide the return-leg inputs to match the selected trip type.
+function syncTripType() {
+  const rt = $("tripType").value === "round_trip";
+  document.querySelectorAll(".add .rt").forEach((el) => (el.hidden = !rt));
+  $("returnDate").required = rt;
+}
+$("tripType").addEventListener("change", syncTripType);
+
 $("addForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  const tripType = $("tripType").value;
   const body = {
     origin: $("origin").value.trim().toUpperCase(),
     destination: $("destination").value.trim().toUpperCase(),
     departure_date: $("date").value,
     cabin: $("cabin").value,
+    trip_type: tripType,
+    depart_flex_days: Number($("departFlex").value) || 0,
   };
+  if (tripType === "round_trip") {
+    body.return_date = $("returnDate").value;
+    body.return_flex_days = Number($("returnFlex").value) || 0;
+  }
   const r = await fetch(API + "/watches", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
   });
   if (r.status === 401) { location.href = "/login"; return; }
-  if (r.ok) { $("addForm").reset(); load(); }
-  else { $("status").innerHTML = `<div class="error">Could not add watch (${r.status}).</div>`; }
+  if (r.ok) { $("addForm").reset(); syncTripType(); load(); }
+  else {
+    let d = `Could not add watch (${r.status}).`;
+    try { const j = await r.json(); if (typeof j.detail === "string") d = j.detail; } catch {}
+    $("status").innerHTML = `<div class="error">${d}</div>`;
+  }
 });
 
 $("refresh").addEventListener("click", load);

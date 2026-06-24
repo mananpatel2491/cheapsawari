@@ -34,6 +34,7 @@ from .poll import PollSummary, poll_active_watches
 from .providers import ProviderError, get_provider
 from .signal import SignalResult, detect_reopening
 from .store import WatchNotFoundError, get_repository
+from .trip import price_watch_trip
 from .users import get_user_repository
 
 app = FastAPI(
@@ -294,15 +295,19 @@ def refresh_watch(watch_id: str = Path(..., description="Watch id.")) -> Refresh
         raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.")
 
     try:
-        offer = get_provider().get_cheapest_offer(
-            watch.origin, watch.destination, watch.departure_date, watch.cabin
-        )
+        quote = price_watch_trip(get_provider(), watch)
     except ProviderError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    if offer is None:
+    if quote is None:
         return RefreshResult(recorded=False, reason="no inventory")
-    snapshot = repo.add_snapshot(watch_id, offer)
+    snapshot = repo.add_snapshot(
+        watch_id,
+        quote.outbound,
+        total=quote.total,
+        outbound_date=quote.outbound.departure_date,
+        return_offer=quote.return_leg,
+    )
     return RefreshResult(recorded=True, snapshot=snapshot)
 
 

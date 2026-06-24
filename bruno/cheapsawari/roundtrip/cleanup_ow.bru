@@ -1,0 +1,13 @@
+meta {
+  name: One-way · cleanup flex watch
+  type: http
+  seq: 9
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/watches/{{owId}}
+}
+
+assert {
+  res.status: eq 204
+}

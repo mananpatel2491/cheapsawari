@@ -1,0 +1,40 @@
+meta {
+  name: Round-trip · refresh prices both legs and totals them
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches/{{rtId}}/refresh
+  body: none
+}
+
+docs {
+  A refresh window-searches each leg via the mock provider and stores ONE snapshot whose
+  price is the trip total, with the cheapest outbound/return dates and per-leg prices.
+}
+
+assert {
+  res.status: eq 200
+  res.body.recorded: eq true
+  res.body.snapshot.outbound_price: isNumber
+  res.body.snapshot.return_price: isNumber
+  res.body.snapshot.outbound_date: isString
+  res.body.snapshot.return_date: isString
+  res.body.snapshot.price: isNumber
+}
+
+tests {
+  test("trip total equals outbound + return", function () {
+    const s = res.body.snapshot;
+    expect(s.price).to.equal(s.outbound_price + s.return_price);
+  });
+  test("chosen outbound date is inside the flex window", function () {
+    const d = res.body.snapshot.outbound_date;
+    expect(d >= "2026-12-08" && d <= "2026-12-14").to.equal(true);
+  });
+  test("chosen return date is inside the flex window", function () {
+    const d = res.body.snapshot.return_date;
+    expect(d >= "2027-01-05" && d <= "2027-01-11").to.equal(true);
+  });
+}

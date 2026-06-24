@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from google.cloud import firestore
 
 from ..models import Offer, PriceSnapshot, Watch, WatchCreate
-from .base import WatchNotFoundError, WatchRepository
+from .base import WatchNotFoundError, WatchRepository, build_snapshot
 
 _WATCHES = "watches"
 _SNAPSHOTS = "snapshots"
@@ -50,6 +50,7 @@ class FirestoreWatchRepository(WatchRepository):
     @staticmethod
     def _to_watch(doc) -> Watch:
         d = doc.to_dict()
+        rd = d.get("return_date")
         return Watch(
             id=doc.id,
             origin=d["origin"],
@@ -58,11 +59,16 @@ class FirestoreWatchRepository(WatchRepository):
             cabin=d["cabin"],
             active=bool(d.get("active", True)),
             created_at=_as_utc(d["created_at"]),
+            trip_type=d.get("trip_type", "one_way"),
+            return_date=_date.fromisoformat(rd) if rd else None,
+            depart_flex_days=int(d.get("depart_flex_days", 0)),
+            return_flex_days=int(d.get("return_flex_days", 0)),
         )
 
     @staticmethod
     def _to_snapshot(doc, watch_id: str) -> PriceSnapshot:
         d = doc.to_dict()
+        od, rd = d.get("outbound_date"), d.get("return_date")
         return PriceSnapshot(
             id=doc.id,
             watch_id=watch_id,
@@ -73,6 +79,10 @@ class FirestoreWatchRepository(WatchRepository):
             carrier=d.get("carrier"),
             provider=d["provider"],
             observed_at=_as_utc(d["observed_at"]),
+            outbound_price=d.get("outbound_price"),
+            outbound_date=_date.fromisoformat(od) if od else None,
+            return_price=d.get("return_price"),
+            return_date=_date.fromisoformat(rd) if rd else None,
         )
 
     # --- watches ------------------------------------------------------------
@@ -85,6 +95,10 @@ class FirestoreWatchRepository(WatchRepository):
             cabin=data.cabin.upper(),
             active=True,
             created_at=_now(),
+            trip_type=data.trip_type,
+            return_date=data.return_date,
+            depart_flex_days=data.depart_flex_days,
+            return_flex_days=data.return_flex_days,
         )
         self._db.collection(_WATCHES).document(watch.id).set(
             {
@@ -94,6 +108,10 @@ class FirestoreWatchRepository(WatchRepository):
                 "cabin": watch.cabin,
                 "active": watch.active,
                 "created_at": watch.created_at,
+                "trip_type": watch.trip_type,
+                "return_date": watch.return_date.isoformat() if watch.return_date else None,
+                "depart_flex_days": watch.depart_flex_days,
+                "return_flex_days": watch.return_flex_days,
             }
         )
         return watch
@@ -121,20 +139,20 @@ class FirestoreWatchRepository(WatchRepository):
         return True
 
     # --- snapshots ----------------------------------------------------------
-    def add_snapshot(self, watch_id: str, offer: Offer) -> PriceSnapshot:
+    def add_snapshot(
+        self,
+        watch_id: str,
+        offer: Offer,
+        *,
+        total: float | None = None,
+        outbound_date=None,
+        return_offer: Offer | None = None,
+    ) -> PriceSnapshot:
         ref = self._db.collection(_WATCHES).document(watch_id)
         if not ref.get().exists:
             raise WatchNotFoundError(watch_id)
-        snap = PriceSnapshot(
-            id=str(uuid.uuid4()),
-            watch_id=watch_id,
-            price=offer.price,
-            currency=offer.currency,
-            cabin=offer.cabin,
-            fare_basis=offer.fare_basis,
-            carrier=offer.carrier,
-            provider=offer.provider,
-            observed_at=offer.observed_at,
+        snap = build_snapshot(
+            watch_id, offer, total=total, outbound_date=outbound_date, return_offer=return_offer
         )
         ref.collection(_SNAPSHOTS).document(snap.id).set(
             {
@@ -145,6 +163,10 @@ class FirestoreWatchRepository(WatchRepository):
                 "carrier": snap.carrier,
                 "provider": snap.provider,
                 "observed_at": snap.observed_at,
+                "outbound_price": snap.outbound_price,
+                "outbound_date": snap.outbound_date.isoformat() if snap.outbound_date else None,
+                "return_price": snap.return_price,
+                "return_date": snap.return_date.isoformat() if snap.return_date else None,
             }
         )
         return snap

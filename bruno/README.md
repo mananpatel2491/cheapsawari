@@ -39,9 +39,12 @@ cd bruno/cheapsawari && bru run --env local
 ```
 
 ## Current status
-**55 requests / 136 assertions, all passing.**
+**64 requests / 167 assertions / 5 tests, all passing.**
 - `auth/` (Slice 6) — no-session 401, dev login (owner), allowlist add/list/revoke,
   owner-vs-invitee gating (403), non-allowlisted refusal, public auth-config.
+- `roundtrip/` (Slice 7) — flexible round-trip create + refresh (trip total =
+  outbound+return, both dates inside their flex windows), per-leg snapshot fields,
+  one-way-with-flex, and the 422 guards (missing/invalid return_date).
 - `offers/` (Slice 1) — liveness + active provider, the deterministic Offer contract,
   lower-case IATA normalization, cabin pass-through, and the 404 / 400 / 422 error envelope.
 - `watches/` (Slice 2) — full watch lifecycle (create → get → list → refresh ×2 →

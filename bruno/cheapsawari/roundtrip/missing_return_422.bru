@@ -1,0 +1,27 @@
+meta {
+  name: Round-trip · missing return_date is rejected (422)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "origin": "dtw",
+    "destination": "amd",
+    "departure_date": "2026-12-08",
+    "trip_type": "round_trip"
+  }
+}
+
+docs {
+  A round_trip without a return_date is an invalid trip — model validation returns 422.
+}
+
+assert {
+  res.status: eq 422
+}

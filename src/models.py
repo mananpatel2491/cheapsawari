@@ -9,7 +9,15 @@ from __future__ import annotations
 from datetime import date as _date
 from datetime import datetime, timezone
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+# --- Slice 7: round-trip + date flexibility -------------------------------
+#: Trip shapes a watch can track. Multi-city is a planned later slice.
+TRIP_TYPES = ("one_way", "round_trip")
+#: Cap on how many days a flexible leg may span past its anchor date. Bounds the
+#: per-poll provider fan-out (a flexible round trip queries
+#: (depart_flex_days+1) + (return_flex_days+1) dates), keeping quota predictable.
+MAX_FLEX_DAYS = 21
 
 
 class Offer(BaseModel):
@@ -43,12 +51,42 @@ class Offer(BaseModel):
 # --- Slice 2: watches + persistence ---------------------------------------
 
 class WatchCreate(BaseModel):
-    """Input for registering a new watch (a route+date the user wants tracked)."""
+    """Input for registering a new watch (a trip the user wants tracked).
+
+    Supports one-way and round-trip shapes with per-leg date flexibility (Slice 7).
+    For a flexible leg, the anchor date is the *earliest* date and the leg is searched
+    forward across ``flex_days`` days; the watch tracks the cheapest date in that window.
+    """
 
     origin: str = Field(..., description="Origin IATA code.")
     destination: str = Field(..., description="Destination IATA code.")
-    departure_date: _date = Field(..., description="Departure date to track.")
+    departure_date: _date = Field(..., description="Outbound date (earliest, if flexible).")
     cabin: str = Field("ECONOMY", description="Cabin class to track.")
+    trip_type: str = Field("one_way", description="'one_way' or 'round_trip'.")
+    return_date: _date | None = Field(
+        None, description="Return date (earliest, if flexible). Required for round_trip."
+    )
+    depart_flex_days: int = Field(
+        0, ge=0, le=MAX_FLEX_DAYS, description="Search the outbound up to N days past departure_date."
+    )
+    return_flex_days: int = Field(
+        0, ge=0, le=MAX_FLEX_DAYS, description="Search the return up to N days past return_date."
+    )
+
+    @model_validator(mode="after")
+    def _check_trip(self) -> "WatchCreate":
+        if self.trip_type not in TRIP_TYPES:
+            raise ValueError(f"trip_type must be one of {TRIP_TYPES}.")
+        if self.trip_type == "round_trip":
+            if self.return_date is None:
+                raise ValueError("return_date is required for a round_trip.")
+            if self.return_date < self.departure_date:
+                raise ValueError("return_date must not be before departure_date.")
+        else:
+            # Normalize a one-way watch so return fields can't carry stray data.
+            self.return_date = None
+            self.return_flex_days = 0
+        return self
 
 
 class Watch(WatchCreate):
@@ -62,19 +100,27 @@ class Watch(WatchCreate):
 class PriceSnapshot(BaseModel):
     """One observed fare for a watch — a row in the price time-series.
 
-    Built from an :class:`Offer` and tied to a watch. This is what signal
-    detection (Slice 4) will read to spot drops / reopened buckets.
+    ``price`` is the *trip total*: the single fare for a one-way watch, or
+    outbound+return for a round trip. Signal detection (Slice 4) reads ``price``, so
+    it works unchanged on round trips. ``currency``/``cabin``/``fare_basis``/``carrier``
+    describe the outbound leg. The ``outbound_*``/``return_*`` fields (Slice 7) break the
+    total down and record which flexible date in each window was cheapest.
     """
 
     id: str = Field(..., description="Stable snapshot id (uuid4).")
     watch_id: str = Field(..., description="The watch this observation belongs to.")
-    price: float = Field(..., ge=0)
+    price: float = Field(..., ge=0, description="Trip total (outbound + return for round trips).")
     currency: str
     cabin: str
     fare_basis: str | None = None
     carrier: str | None = None
     provider: str
     observed_at: datetime
+    # Slice 7 — per-leg breakdown (None on legacy one-way snapshots).
+    outbound_price: float | None = Field(None, description="Cheapest outbound fare.")
+    outbound_date: _date | None = Field(None, description="Cheapest outbound date in the window.")
+    return_price: float | None = Field(None, description="Cheapest return fare (round trips).")
+    return_date: _date | None = Field(None, description="Cheapest return date in the window.")
 
 
 class RefreshResult(BaseModel):

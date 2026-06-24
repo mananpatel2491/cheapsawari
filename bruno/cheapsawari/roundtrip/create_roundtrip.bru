@@ -1,0 +1,44 @@
+meta {
+  name: Round-trip · create flexible DTW⇄AMD watch
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "origin": "dtw",
+    "destination": "amd",
+    "departure_date": "2026-12-08",
+    "trip_type": "round_trip",
+    "return_date": "2027-01-05",
+    "depart_flex_days": 6,
+    "return_flex_days": 6,
+    "cabin": "economy"
+  }
+}
+
+vars:post-response {
+  rtId: res.body.id
+}
+
+docs {
+  Slice 7: a round-trip watch with a flexible date window on each leg (the owner's real
+  DTW⇄AMD trip — depart 2nd week Dec, return 1st week Jan, both flexible). The new fields
+  must round-trip through persistence; IATA codes still normalize to upper-case.
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isString
+  res.body.origin: eq DTW
+  res.body.destination: eq AMD
+  res.body.trip_type: eq round_trip
+  res.body.return_date: eq 2027-01-05
+  res.body.depart_flex_days: eq 6
+  res.body.return_flex_days: eq 6
+}

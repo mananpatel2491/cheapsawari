@@ -19,6 +19,7 @@ from .alerts import AlertChannel, AlertError
 from .providers import FareProvider, ProviderError
 from .signal import detect_reopening
 from .store import WatchRepository
+from .trip import price_watch_trip
 
 _log = logging.getLogger("cheapsawari.poll")
 
@@ -73,18 +74,22 @@ def poll_active_watches(
     for watch in active[:max_per_run]:
         polled += 1
         try:
-            offer = provider.get_cheapest_offer(
-                watch.origin, watch.destination, watch.departure_date, watch.cabin
-            )
+            quote = price_watch_trip(provider, watch)
         except ProviderError:
             errors += 1
             continue
 
-        if offer is None:
+        if quote is None:
             no_inventory += 1
             continue
 
-        repo.add_snapshot(watch.id, offer)
+        repo.add_snapshot(
+            watch.id,
+            quote.outbound,
+            total=quote.total,
+            outbound_date=quote.outbound.departure_date,
+            return_offer=quote.return_leg,
+        )
         recorded += 1
 
         if alerter is None:

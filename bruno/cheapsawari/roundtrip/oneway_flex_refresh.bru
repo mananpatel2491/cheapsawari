@@ -1,0 +1,33 @@
+meta {
+  name: One-way · flex refresh records chosen date, no return leg
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches/{{owId}}/refresh
+  body: none
+}
+
+docs {
+  A one-way snapshot has price == outbound_price, an outbound_date inside the window,
+  and no return leg.
+}
+
+assert {
+  res.status: eq 200
+  res.body.recorded: eq true
+  res.body.snapshot.outbound_date: isString
+  res.body.snapshot.return_price: isNull
+}
+
+tests {
+  test("one-way total equals the outbound fare", function () {
+    const s = res.body.snapshot;
+    expect(s.price).to.equal(s.outbound_price);
+  });
+  test("chosen outbound date is inside the flex window", function () {
+    const d = res.body.snapshot.outbound_date;
+    expect(d >= "2026-10-01" && d <= "2026-10-06").to.equal(true);
+  });
+}
