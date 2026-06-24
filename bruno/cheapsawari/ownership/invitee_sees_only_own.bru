@@ -1,0 +1,29 @@
+meta {
+  name: Ownership · invitee list excludes the owner's watch
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches
+}
+
+docs {
+  The core privacy guarantee: the invitee's list contains their own watch and NOT the
+  owner's. (The fix for Slice 6's global-watches gap.)
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("invitee sees their own watch", function () {
+    const ids = res.body.map((w) => w.id);
+    expect(ids).to.include(bru.getVar("invWatchId"));
+  });
+  test("invitee does NOT see the owner's watch", function () {
+    const ids = res.body.map((w) => w.id);
+    expect(ids).to.not.include(bru.getVar("adminWatchId"));
+  });
+}

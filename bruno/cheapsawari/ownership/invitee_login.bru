@@ -1,0 +1,25 @@
+meta {
+  name: Ownership · invitee signs in
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/dev
+  body: json
+}
+
+body:json {
+  {
+    "email": "{{inviteEmail}}"
+  }
+}
+
+docs {
+  The dev login overwrites the session cookie, switching the caller to the invitee.
+}
+
+assert {
+  res.status: eq 200
+  res.body.is_admin: eq false
+}

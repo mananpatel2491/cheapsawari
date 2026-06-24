@@ -1,0 +1,26 @@
+meta {
+  name: Ownership · sign in as owner
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/dev
+  body: json
+}
+
+body:json {
+  {
+    "email": "{{adminEmail}}"
+  }
+}
+
+docs {
+  Slice 8: watches are private per user. This suite proves an invited user sees only
+  their own watches while the admin (owner) sees everyone's. Start as the owner.
+}
+
+assert {
+  res.status: eq 200
+  res.body.is_admin: eq true
+}

@@ -1,0 +1,17 @@
+meta {
+  name: Ownership · invitee cannot read the owner's watch (404)
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches/{{adminWatchId}}
+}
+
+docs {
+  Accessing someone else's watch returns 404 (not 403), so its existence isn't leaked.
+}
+
+assert {
+  res.status: eq 404
+}

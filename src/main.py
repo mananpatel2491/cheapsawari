@@ -33,7 +33,7 @@ from .models import (
 from .poll import PollSummary, poll_active_watches
 from .providers import ProviderError, get_provider
 from .signal import SignalResult, detect_reopening
-from .store import WatchNotFoundError, get_repository
+from .store import get_repository
 from .trip import price_watch_trip
 from .users import get_user_repository
 
@@ -223,76 +223,71 @@ def cheapest_offer(
     return offer
 
 
-# --- Slice 2: watches + persistence ---------------------------------------
+# --- Slice 2: watches + persistence (Slice 8: per-user ownership) ----------
 
-@app.post(
-    "/api/v1/watches",
-    response_model=Watch,
-    status_code=201,
-    tags=["watches"],
-    dependencies=[Depends(auth.require_user)],
-)
-def create_watch(data: WatchCreate) -> Watch:
-    """Register a route+date to track. 400 if origin == destination."""
-    if data.origin.upper() == data.destination.upper():
-        raise HTTPException(status_code=400, detail="origin and destination must differ.")
-    return get_repository().create_watch(data)
+def _owned_watch(repo, watch_id: str, user: SessionUser) -> Watch:
+    """Fetch a watch the caller may act on, else 404.
 
-
-@app.get(
-    "/api/v1/watches",
-    response_model=list[Watch],
-    tags=["watches"],
-    dependencies=[Depends(auth.require_user)],
-)
-def list_watches(active_only: bool = Query(False, description="Only return active watches.")) -> list[Watch]:
-    """List tracked watches, newest first."""
-    return get_repository().list_watches(active_only=active_only)
-
-
-@app.get(
-    "/api/v1/watches/{watch_id}",
-    response_model=Watch,
-    tags=["watches"],
-    dependencies=[Depends(auth.require_user)],
-)
-def get_watch(watch_id: str = Path(..., description="Watch id.")) -> Watch:
-    """Fetch a single watch. 404 if unknown."""
-    watch = get_repository().get_watch(watch_id)
-    if watch is None:
+    Ownership is private per user; the admin (owner) may act on any watch. We return
+    404 — not 403 — for someone else's watch so its existence isn't leaked.
+    """
+    watch = repo.get_watch(watch_id)
+    if watch is None or (not user.is_admin and watch.owner_email != user.email):
         raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.")
     return watch
 
 
-@app.delete(
-    "/api/v1/watches/{watch_id}",
-    status_code=204,
-    tags=["watches"],
-    dependencies=[Depends(auth.require_user)],
-)
-def delete_watch(watch_id: str = Path(..., description="Watch id.")) -> None:
-    """Delete a watch and its snapshots. 404 if unknown."""
-    if not get_repository().delete_watch(watch_id):
-        raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.")
+@app.post("/api/v1/watches", response_model=Watch, status_code=201, tags=["watches"])
+def create_watch(data: WatchCreate, user: SessionUser = Depends(auth.require_user)) -> Watch:
+    """Register a route+date to track, owned by the signed-in user. 400 if origin == destination."""
+    if data.origin.upper() == data.destination.upper():
+        raise HTTPException(status_code=400, detail="origin and destination must differ.")
+    return get_repository().create_watch(data, owner_email=user.email)
 
 
-@app.post(
-    "/api/v1/watches/{watch_id}/refresh",
-    response_model=RefreshResult,
-    tags=["watches"],
-    dependencies=[Depends(auth.require_user)],
-)
-def refresh_watch(watch_id: str = Path(..., description="Watch id.")) -> RefreshResult:
+@app.get("/api/v1/watches", response_model=list[Watch], tags=["watches"])
+def list_watches(
+    active_only: bool = Query(False, description="Only return active watches."),
+    user: SessionUser = Depends(auth.require_user),
+) -> list[Watch]:
+    """List the caller's watches, newest first. The admin sees every user's watches."""
+    owner = None if user.is_admin else user.email
+    return get_repository().list_watches(active_only=active_only, owner_email=owner)
+
+
+@app.get("/api/v1/watches/{watch_id}", response_model=Watch, tags=["watches"])
+def get_watch(
+    watch_id: str = Path(..., description="Watch id."),
+    user: SessionUser = Depends(auth.require_user),
+) -> Watch:
+    """Fetch one of the caller's watches. 404 if unknown or not theirs."""
+    return _owned_watch(get_repository(), watch_id, user)
+
+
+@app.delete("/api/v1/watches/{watch_id}", status_code=204, tags=["watches"])
+def delete_watch(
+    watch_id: str = Path(..., description="Watch id."),
+    user: SessionUser = Depends(auth.require_user),
+) -> None:
+    """Delete one of the caller's watches and its snapshots. 404 if unknown or not theirs."""
+    repo = get_repository()
+    _owned_watch(repo, watch_id, user)
+    repo.delete_watch(watch_id)
+
+
+@app.post("/api/v1/watches/{watch_id}/refresh", response_model=RefreshResult, tags=["watches"])
+def refresh_watch(
+    watch_id: str = Path(..., description="Watch id."),
+    user: SessionUser = Depends(auth.require_user),
+) -> RefreshResult:
     """Poll a watch once via the active provider and store a snapshot.
 
     The manual precursor to Slice 3's scheduler — lets a watch accumulate price
-    history on demand. 404 if the watch is unknown; 502 on provider error;
+    history on demand. 404 if the watch is unknown/not theirs; 502 on provider error;
     `recorded=false` (200) if the route currently has no inventory.
     """
     repo = get_repository()
-    watch = repo.get_watch(watch_id)
-    if watch is None:
-        raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.")
+    watch = _owned_watch(repo, watch_id, user)
 
     try:
         quote = price_watch_trip(get_provider(), watch)
@@ -315,17 +310,16 @@ def refresh_watch(watch_id: str = Path(..., description="Watch id.")) -> Refresh
     "/api/v1/watches/{watch_id}/snapshots",
     response_model=list[PriceSnapshot],
     tags=["watches"],
-    dependencies=[Depends(auth.require_user)],
 )
 def list_snapshots(
     watch_id: str = Path(..., description="Watch id."),
     limit: int = Query(100, ge=1, le=1000, description="Max snapshots to return."),
+    user: SessionUser = Depends(auth.require_user),
 ) -> list[PriceSnapshot]:
-    """Return a watch's price history (newest first). 404 if the watch is unknown."""
-    try:
-        return get_repository().list_snapshots(watch_id, limit=limit)
-    except WatchNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.") from exc
+    """Return the caller's watch price history (newest first). 404 if unknown or not theirs."""
+    repo = get_repository()
+    _owned_watch(repo, watch_id, user)
+    return repo.list_snapshots(watch_id, limit=limit)
 
 
 @app.post(
@@ -333,20 +327,19 @@ def list_snapshots(
     response_model=PriceSnapshot,
     status_code=201,
     tags=["watches"],
-    dependencies=[Depends(auth.require_user)],
 )
 def record_snapshot(
-    data: SnapshotCreate, watch_id: str = Path(..., description="Watch id.")
+    data: SnapshotCreate,
+    watch_id: str = Path(..., description="Watch id."),
+    user: SessionUser = Depends(auth.require_user),
 ) -> PriceSnapshot:
-    """Manually record an observed fare for a watch (provider='manual').
+    """Manually record an observed fare for one of the caller's watches (provider='manual').
 
     Lets you log a price you spotted, or backfill history. 404 if the watch is
-    unknown. The cabin defaults to the watch's cabin; observed_at defaults to now.
+    unknown/not theirs. The cabin defaults to the watch's cabin; observed_at defaults to now.
     """
     repo = get_repository()
-    watch = repo.get_watch(watch_id)
-    if watch is None:
-        raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.")
+    watch = _owned_watch(repo, watch_id, user)
 
     offer = Offer(
         origin=watch.origin,
@@ -369,21 +362,21 @@ def record_snapshot(
     "/api/v1/watches/{watch_id}/signal",
     response_model=SignalResult,
     tags=["signal"],
-    dependencies=[Depends(auth.require_user)],
 )
-def get_signal(watch_id: str = Path(..., description="Watch id.")) -> SignalResult:
-    """Detect a freshly reopened cheaper bucket in a watch's price history.
+def get_signal(
+    watch_id: str = Path(..., description="Watch id."),
+    user: SessionUser = Depends(auth.require_user),
+) -> SignalResult:
+    """Detect a freshly reopened cheaper bucket in the caller's watch price history.
 
     Reads the watch's snapshot series and applies the trailing moving-average
     drop test (defaults: >15% below the 7-day average, rising edge only). 404 if
-    the watch is unknown; otherwise `detected` is false when no signal fires.
+    the watch is unknown/not theirs; otherwise `detected` is false when no signal fires.
     """
     repo = get_repository()
     settings = get_settings()
-    try:
-        snapshots = repo.list_snapshots(watch_id, limit=1000)
-    except WatchNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=f"Watch '{watch_id}' not found.") from exc
+    _owned_watch(repo, watch_id, user)
+    snapshots = repo.list_snapshots(watch_id, limit=1000)
 
     signal = detect_reopening(
         snapshots, settings.signal_threshold_pct, settings.signal_window_days

@@ -95,6 +95,9 @@ class Watch(WatchCreate):
     id: str = Field(..., description="Stable watch id (uuid4).")
     active: bool = Field(True, description="Whether the scheduler (Slice 3) should poll it.")
     created_at: datetime = Field(..., description="UTC creation timestamp.")
+    # Slice 8 — ownership: the signed-in user who created the watch. Server-assigned
+    # (never client input). None on legacy pre-Slice-8 watches → visible to the admin only.
+    owner_email: str | None = Field(None, description="Email of the user who owns this watch.")
 
 
 class PriceSnapshot(BaseModel):

@@ -50,16 +50,21 @@ class WatchRepository(abc.ABC):
     """
 
     @abc.abstractmethod
-    def create_watch(self, data: WatchCreate) -> Watch:
-        """Persist a new watch and return it (with id + created_at assigned)."""
+    def create_watch(self, data: WatchCreate, owner_email: str | None = None) -> Watch:
+        """Persist a new watch (owned by ``owner_email``) and return it."""
 
     @abc.abstractmethod
     def get_watch(self, watch_id: str) -> Watch | None:
-        """Return the watch, or None if it does not exist."""
+        """Return the watch, or None if it does not exist. (Ownership is enforced by the API.)"""
 
     @abc.abstractmethod
-    def list_watches(self, active_only: bool = False) -> list[Watch]:
-        """Return all watches, newest first. If active_only, skip paused watches."""
+    def list_watches(self, active_only: bool = False, owner_email: str | None = None) -> list[Watch]:
+        """Return watches, newest first.
+
+        If ``active_only``, skip paused watches. If ``owner_email`` is given, return only
+        that user's watches; ``None`` returns every owner's (used by the scheduler poll and
+        the admin's see-all view).
+        """
 
     @abc.abstractmethod
     def delete_watch(self, watch_id: str) -> bool:

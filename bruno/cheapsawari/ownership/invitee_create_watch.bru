@@ -1,0 +1,27 @@
+meta {
+  name: Ownership · invitee creates their own watch
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "origin": "sfo",
+    "destination": "ord",
+    "departure_date": "2026-10-01"
+  }
+}
+
+vars:post-response {
+  invWatchId: res.body.id
+}
+
+assert {
+  res.status: eq 201
+  res.body.owner_email: eq {{inviteEmail}}
+}

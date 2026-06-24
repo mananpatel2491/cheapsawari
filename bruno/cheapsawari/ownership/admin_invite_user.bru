@@ -1,0 +1,25 @@
+meta {
+  name: Ownership · owner allowlists the invitee
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/users
+  body: json
+}
+
+body:json {
+  {
+    "email": "{{inviteEmail}}"
+  }
+}
+
+docs {
+  Grant the invitee access so they can sign in and create their own watch. Idempotent.
+}
+
+assert {
+  res.status: eq 201
+  res.body.email: eq {{inviteEmail}}
+}

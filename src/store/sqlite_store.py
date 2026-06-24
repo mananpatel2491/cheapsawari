@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS watches (
     trip_type        TEXT NOT NULL DEFAULT 'one_way',
     return_date      TEXT,
     depart_flex_days INTEGER NOT NULL DEFAULT 0,
-    return_flex_days INTEGER NOT NULL DEFAULT 0
+    return_flex_days INTEGER NOT NULL DEFAULT 0,
+    owner_email      TEXT
 );
 CREATE TABLE IF NOT EXISTS snapshots (
     id          TEXT PRIMARY KEY,
@@ -59,6 +60,7 @@ _MIGRATIONS = {
         ("return_date", "TEXT"),
         ("depart_flex_days", "INTEGER NOT NULL DEFAULT 0"),
         ("return_flex_days", "INTEGER NOT NULL DEFAULT 0"),
+        ("owner_email", "TEXT"),  # Slice 8 — per-user ownership
     ],
     "snapshots": [
         ("outbound_price", "REAL"),
@@ -115,6 +117,7 @@ class SqliteWatchRepository(WatchRepository):
             return_date=_date.fromisoformat(row["return_date"]) if row["return_date"] else None,
             depart_flex_days=row["depart_flex_days"],
             return_flex_days=row["return_flex_days"],
+            owner_email=row["owner_email"],
         )
 
     @staticmethod
@@ -136,7 +139,7 @@ class SqliteWatchRepository(WatchRepository):
         )
 
     # --- watches ------------------------------------------------------------
-    def create_watch(self, data: WatchCreate) -> Watch:
+    def create_watch(self, data: WatchCreate, owner_email: str | None = None) -> Watch:
         watch = Watch(
             id=str(uuid.uuid4()),
             origin=data.origin.upper(),
@@ -149,12 +152,13 @@ class SqliteWatchRepository(WatchRepository):
             return_date=data.return_date,
             depart_flex_days=data.depart_flex_days,
             return_flex_days=data.return_flex_days,
+            owner_email=owner_email,
         )
         with self._conn() as conn:
             conn.execute(
                 "INSERT INTO watches (id, origin, destination, departure_date, cabin, active, "
-                "created_at, trip_type, return_date, depart_flex_days, return_flex_days) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "created_at, trip_type, return_date, depart_flex_days, return_flex_days, owner_email) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     watch.id,
                     watch.origin,
@@ -167,6 +171,7 @@ class SqliteWatchRepository(WatchRepository):
                     watch.return_date.isoformat() if watch.return_date else None,
                     watch.depart_flex_days,
                     watch.return_flex_days,
+                    watch.owner_email,
                 ),
             )
         return watch
@@ -176,13 +181,19 @@ class SqliteWatchRepository(WatchRepository):
             row = conn.execute("SELECT * FROM watches WHERE id = ?", (watch_id,)).fetchone()
         return self._row_to_watch(row) if row else None
 
-    def list_watches(self, active_only: bool = False) -> list[Watch]:
-        query = "SELECT * FROM watches"
+    def list_watches(self, active_only: bool = False, owner_email: str | None = None) -> list[Watch]:
+        clauses, params = [], []
         if active_only:
-            query += " WHERE active = 1"
+            clauses.append("active = 1")
+        if owner_email is not None:
+            clauses.append("owner_email = ?")
+            params.append(owner_email)
+        query = "SELECT * FROM watches"
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
         query += " ORDER BY created_at DESC"
         with self._conn() as conn:
-            rows = conn.execute(query).fetchall()
+            rows = conn.execute(query, params).fetchall()
         return [self._row_to_watch(r) for r in rows]
 
     def delete_watch(self, watch_id: str) -> bool:

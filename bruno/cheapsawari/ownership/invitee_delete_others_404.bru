@@ -1,0 +1,17 @@
+meta {
+  name: Ownership · invitee cannot delete the owner's watch (404)
+  type: http
+  seq: 8
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/watches/{{adminWatchId}}
+}
+
+docs {
+  Write operations on another user's watch are likewise rejected as 404.
+}
+
+assert {
+  res.status: eq 404
+}

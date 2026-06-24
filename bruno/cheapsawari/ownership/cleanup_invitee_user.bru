@@ -1,0 +1,13 @@
+meta {
+  name: Ownership · cleanup invitee allowlist entry
+  type: http
+  seq: 14
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/admin/users/{{inviteEmail}}
+}
+
+assert {
+  res.status: eq 204
+}

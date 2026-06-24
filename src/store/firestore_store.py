@@ -63,6 +63,7 @@ class FirestoreWatchRepository(WatchRepository):
             return_date=_date.fromisoformat(rd) if rd else None,
             depart_flex_days=int(d.get("depart_flex_days", 0)),
             return_flex_days=int(d.get("return_flex_days", 0)),
+            owner_email=d.get("owner_email"),
         )
 
     @staticmethod
@@ -86,7 +87,7 @@ class FirestoreWatchRepository(WatchRepository):
         )
 
     # --- watches ------------------------------------------------------------
-    def create_watch(self, data: WatchCreate) -> Watch:
+    def create_watch(self, data: WatchCreate, owner_email: str | None = None) -> Watch:
         watch = Watch(
             id=str(uuid.uuid4()),
             origin=data.origin.upper(),
@@ -99,6 +100,7 @@ class FirestoreWatchRepository(WatchRepository):
             return_date=data.return_date,
             depart_flex_days=data.depart_flex_days,
             return_flex_days=data.return_flex_days,
+            owner_email=owner_email,
         )
         self._db.collection(_WATCHES).document(watch.id).set(
             {
@@ -112,6 +114,7 @@ class FirestoreWatchRepository(WatchRepository):
                 "return_date": watch.return_date.isoformat() if watch.return_date else None,
                 "depart_flex_days": watch.depart_flex_days,
                 "return_flex_days": watch.return_flex_days,
+                "owner_email": watch.owner_email,
             }
         )
         return watch
@@ -120,11 +123,13 @@ class FirestoreWatchRepository(WatchRepository):
         doc = self._db.collection(_WATCHES).document(watch_id).get()
         return self._to_watch(doc) if doc.exists else None
 
-    def list_watches(self, active_only: bool = False) -> list[Watch]:
-        docs = self._db.collection(_WATCHES).stream()
-        watches = [self._to_watch(d) for d in docs]
+    def list_watches(self, active_only: bool = False, owner_email: str | None = None) -> list[Watch]:
+        # Filter in Python (personal scale = few watches) to avoid composite indexes.
+        watches = [self._to_watch(d) for d in self._db.collection(_WATCHES).stream()]
         if active_only:
             watches = [w for w in watches if w.active]
+        if owner_email is not None:
+            watches = [w for w in watches if w.owner_email == owner_email]
         watches.sort(key=lambda w: w.created_at, reverse=True)
         return watches
 

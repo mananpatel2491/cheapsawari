@@ -1,0 +1,18 @@
+meta {
+  name: Ownership · owner can open the invitee's watch
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches/{{invWatchId}}
+}
+
+docs {
+  The admin override lets the owner read any user's watch directly.
+}
+
+assert {
+  res.status: eq 200
+  res.body.owner_email: eq {{inviteEmail}}
+}

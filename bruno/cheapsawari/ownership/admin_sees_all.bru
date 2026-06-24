@@ -1,0 +1,26 @@
+meta {
+  name: Ownership · owner sees every user's watch
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches
+}
+
+docs {
+  Per the chosen policy (private per user, admin sees all), the owner's list includes
+  both their own watch and the invitee's.
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("owner sees their own and the invitee's watch", function () {
+    const ids = res.body.map((w) => w.id);
+    expect(ids).to.include(bru.getVar("adminWatchId"));
+    expect(ids).to.include(bru.getVar("invWatchId"));
+  });
+}
