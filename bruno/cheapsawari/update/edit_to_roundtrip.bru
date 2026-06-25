@@ -1,0 +1,39 @@
+meta {
+  name: Update · edit it into a flexible round-trip (PUT)
+  type: http
+  seq: 2
+}
+
+put {
+  url: {{baseUrl}}/api/v1/watches/{{updId}}
+  body: json
+}
+
+body:json {
+  {
+    "origin": "dtw",
+    "destination": "amd",
+    "departure_date": "2026-12-08",
+    "trip_type": "round_trip",
+    "return_date": "2027-01-05",
+    "depart_flex_days": 6,
+    "return_flex_days": 6,
+    "cabin": "business"
+  }
+}
+
+docs {
+  Slice 15: edit the trip definition in place. The new trip-type/return/flex/cabin must
+  take effect, while identity is preserved — same id, same created_at (lifecycle untouched).
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{updId}}
+  res.body.created_at: eq {{updCreatedAt}}
+  res.body.trip_type: eq round_trip
+  res.body.return_date: eq 2027-01-05
+  res.body.depart_flex_days: eq 6
+  res.body.return_flex_days: eq 6
+  res.body.cabin: eq BUSINESS
+}

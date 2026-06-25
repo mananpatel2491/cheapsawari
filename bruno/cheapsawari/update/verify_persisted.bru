@@ -1,0 +1,22 @@
+meta {
+  name: Update · GET confirms the edit persisted
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches/{{updId}}
+}
+
+docs {
+  Slice 15: the edit is durable, not just echoed — re-fetching the watch returns the new
+  round-trip definition.
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{updId}}
+  res.body.trip_type: eq round_trip
+  res.body.cabin: eq BUSINESS
+  res.body.return_date: eq 2027-01-05
+}

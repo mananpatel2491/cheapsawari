@@ -1,0 +1,28 @@
+meta {
+  name: Update · same-city edit is rejected (400)
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/v1/watches/{{updId}}
+  body: json
+}
+
+body:json {
+  {
+    "origin": "dtw",
+    "destination": "dtw",
+    "departure_date": "2026-12-08",
+    "trip_type": "one_way",
+    "cabin": "economy"
+  }
+}
+
+docs {
+  Slice 15: PUT enforces the same origin≠destination guard as create for one-way/round-trip.
+}
+
+assert {
+  res.status: eq 400
+}

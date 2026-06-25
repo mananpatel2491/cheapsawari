@@ -195,6 +195,46 @@ class SqliteWatchRepository(WatchRepository):
             row = conn.execute("SELECT * FROM watches WHERE id = ?", (watch_id,)).fetchone()
         return self._row_to_watch(row) if row else None
 
+    def update_watch(self, watch_id: str, data: WatchCreate) -> Watch:
+        existing = self.get_watch(watch_id)
+        if existing is None:
+            raise WatchNotFoundError(watch_id)
+        # Rebuild from the validated input but keep identity + lifecycle.
+        updated = Watch(
+            id=existing.id,
+            origin=data.origin.upper(),
+            destination=data.destination.upper(),
+            departure_date=data.departure_date,
+            cabin=data.cabin.upper(),
+            active=existing.active,
+            created_at=existing.created_at,
+            trip_type=data.trip_type,
+            return_date=data.return_date,
+            depart_flex_days=data.depart_flex_days,
+            return_flex_days=data.return_flex_days,
+            owner_email=existing.owner_email,
+            legs=data.legs,
+        )
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE watches SET origin = ?, destination = ?, departure_date = ?, cabin = ?, "
+                "trip_type = ?, return_date = ?, depart_flex_days = ?, return_flex_days = ?, legs_json = ? "
+                "WHERE id = ?",
+                (
+                    updated.origin,
+                    updated.destination,
+                    updated.departure_date.isoformat(),
+                    updated.cabin,
+                    updated.trip_type,
+                    updated.return_date.isoformat() if updated.return_date else None,
+                    updated.depart_flex_days,
+                    updated.return_flex_days,
+                    _dump_legs(updated.legs),
+                    updated.id,
+                ),
+            )
+        return updated
+
     def list_watches(self, active_only: bool = False, owner_email: str | None = None) -> list[Watch]:
         clauses, params = [], []
         if active_only:

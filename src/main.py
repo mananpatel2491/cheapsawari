@@ -310,6 +310,29 @@ def get_watch(
     return _owned_watch(get_repository(), watch_id, user)
 
 
+@app.put("/api/v1/watches/{watch_id}", response_model=Watch, tags=["watches"])
+def update_watch(
+    data: WatchCreate,
+    watch_id: str = Path(..., description="Watch id."),
+    user: SessionUser = Depends(auth.require_user),
+) -> Watch:
+    """Edit one of the caller's watches in place (route/dates/flex/cabin/trip-type/legs).
+
+    Same validation and 400-on-same-city rule as create. Identity and lifecycle are
+    preserved (id, created_at, owner_email, active) and the price history is kept — the
+    watch simply tracks the new trip definition from here on. 404 if unknown or not theirs.
+    """
+    if data.trip_type != "multi_city" and data.origin.upper() == data.destination.upper():
+        raise HTTPException(status_code=400, detail="origin and destination must differ.")
+    repo = get_repository()
+    existing = _owned_watch(repo, watch_id, user)
+    watch = repo.update_watch(watch_id, data)
+    obs.event(_wlog, "watch.update", watch_id=watch.id, owner=existing.owner_email, by=user.email,
+              trip_type=watch.trip_type, route=f"{watch.origin}->{watch.destination}",
+              legs=len(watch.legs) if watch.legs else 1)
+    return watch
+
+
 @app.delete("/api/v1/watches/{watch_id}", status_code=204, tags=["watches"])
 def delete_watch(
     watch_id: str = Path(..., description="Watch id."),

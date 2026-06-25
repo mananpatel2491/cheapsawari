@@ -1,0 +1,17 @@
+meta {
+  name: Update · cleanup
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/watches/{{updId}}
+}
+
+docs {
+  Slice 15: self-cleaning suite — remove the edited watch and its history.
+}
+
+assert {
+  res.status: eq 204
+}

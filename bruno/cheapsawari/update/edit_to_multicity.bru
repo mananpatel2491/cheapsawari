@@ -1,0 +1,43 @@
+meta {
+  name: Update · edit it into a multi-city chain (PUT)
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/v1/watches/{{updId}}
+  body: json
+}
+
+body:json {
+  {
+    "trip_type": "multi_city",
+    "cabin": "economy",
+    "legs": [
+      { "origin": "dtw", "destination": "cdg", "date": "2026-12-08", "flex_days": 3 },
+      { "origin": "cdg", "destination": "amd", "date": "2026-12-09" }
+    ]
+  }
+}
+
+docs {
+  Slice 15: an edit can also change the trip SHAPE — from round-trip to a multi-city chain.
+  Endpoints are re-derived from the first/last leg; the round-trip return_date is cleared.
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{updId}}
+  res.body.trip_type: eq multi_city
+  res.body.origin: eq DTW
+  res.body.destination: eq AMD
+  res.body.return_date: isNull
+}
+
+tests {
+  test("edit replaced the legs", function () {
+    expect(res.body.legs.length).to.equal(2);
+    expect(res.body.legs[0].origin).to.equal("DTW");
+    expect(res.body.legs[1].destination).to.equal("AMD");
+  });
+}

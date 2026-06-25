@@ -71,6 +71,20 @@ class WatchRepository(abc.ABC):
         """Return the watch, or None if it does not exist. (Ownership is enforced by the API.)"""
 
     @abc.abstractmethod
+    def update_watch(self, watch_id: str, data: WatchCreate) -> Watch:
+        """Replace a watch's trip definition in place and return the updated watch.
+
+        Overwrites the trip fields (origin/destination/dates/flex/cabin/trip_type/legs)
+        from ``data`` while preserving the watch's identity and lifecycle — ``id``,
+        ``created_at``, ``owner_email`` and ``active`` are untouched. Price snapshots are
+        kept (the watch keeps its history); a caller wanting a clean series should delete
+        and re-create. (Ownership is enforced by the API.)
+
+        Raises:
+            WatchNotFoundError: If the watch does not exist.
+        """
+
+    @abc.abstractmethod
     def list_watches(self, active_only: bool = False, owner_email: str | None = None) -> list[Watch]:
         """Return watches, newest first.
 

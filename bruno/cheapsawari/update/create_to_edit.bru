@@ -1,0 +1,36 @@
+meta {
+  name: Update · create a one-way watch to edit (captures id)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "origin": "dtw",
+    "destination": "amd",
+    "departure_date": "2026-12-08",
+    "cabin": "economy"
+  }
+}
+
+vars:post-response {
+  updId: res.body.id
+  updCreatedAt: res.body.created_at
+}
+
+docs {
+  Slice 15: seed a plain one-way watch we will then edit in place via PUT. Captures the id
+  and created_at (asserted preserved after the edit) for the rest of this self-contained suite.
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isString
+  res.body.trip_type: eq one_way
+  res.body.cabin: eq ECONOMY
+}

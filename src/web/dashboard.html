@@ -6,11 +6,26 @@
 <title>cheapsawari — fare bucket tracker</title>
 <style>
   :root {
+    /* color-scheme: dark makes the browser render native controls — including the
+       <input type="date"> calendar picker and its popup — in dark mode, so the
+       date picker is legible against this theme instead of black-on-dark. */
+    color-scheme: dark;
     --bg: #0f1419; --panel: #1a2129; --line: #2a3441; --text: #e6edf3;
     --muted: #8b98a5; --accent: #4cc9f0; --good: #2ecc71; --good-bg: #173d2a;
     --warn: #f0a04c;
   }
   * { box-sizing: border-box; }
+  /* The [hidden] attribute is how we toggle the return-date fields, the multi-city
+     builder, and the modal. Author rules like `.add label { display: flex }` and
+     `.mc { display: flex }` would otherwise out-specify the UA `[hidden]` rule and keep
+     those elements visible — so enforce it. (This is what makes "one-way hides the
+     Return date" actually take effect.) */
+  [hidden] { display: none !important; }
+  /* Make the date-input calendar icon clearly visible + clickable on the dark theme. */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.85); cursor: pointer; opacity: 0.8;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
   body {
     margin: 0; font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     background: var(--bg); color: var(--text);
@@ -77,6 +92,40 @@
   .error { color: #ff6b6b; }
   a { color: var(--accent); }
   .navlink { font-size: 13px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; text-decoration: none; }
+  /* Edit-mode banner across the top of the add/edit form. */
+  .editbar {
+    width: 100%; display: flex; align-items: center; gap: 12px;
+    background: var(--good-bg); border: 1px solid var(--good); border-radius: 6px;
+    padding: 8px 12px; color: var(--good); font-size: 13px; font-weight: 600;
+  }
+  .editbar .spacer { flex: 1; }
+  /* View-details modal. */
+  .modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 40px 16px; overflow-y: auto; z-index: 50;
+  }
+  .modal[hidden] { display: none; }
+  .sheet {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    width: 100%; max-width: 560px; padding: 0; overflow: hidden;
+  }
+  .sheet-head, .sheet-foot {
+    display: flex; align-items: center; gap: 12px; padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .sheet-foot { border-bottom: 0; border-top: 1px solid var(--line); justify-content: flex-end; }
+  .sheet-head h2 { margin: 0; font-size: 17px; }
+  .sheet-head .spacer { flex: 1; }
+  .sheet-body { padding: 18px; }
+  .kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px 14px; font-size: 13.5px; margin-bottom: 16px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; }
+  table.legtab { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.legtab th, table.legtab td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  table.legtab th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  table.legtab td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .seclabel { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin: 0 0 8px; }
 </style>
 </head>
 <body>
@@ -91,6 +140,11 @@
 </header>
 <main>
   <form class="add" id="addForm">
+    <div class="editbar" id="editBar" hidden>
+      <span id="editLabel">Editing tracking</span>
+      <span class="spacer"></span>
+      <button type="button" class="ghost" id="cancelEdit">Cancel</button>
+    </div>
     <label>Trip
       <select id="tripType">
         <option value="one_way">One-way</option>
@@ -110,7 +164,7 @@
         <option>BUSINESS</option><option>FIRST</option>
       </select>
     </label>
-    <button type="submit">+ Track</button>
+    <button type="submit" id="submitBtn">+ Track</button>
     <div class="mc" id="mcBuilder" hidden>
       <div class="mc-hint">Add each leg in order. Tip: route through a city to track a
         <b>transfer airport</b> (DTW→CDG→AMD), or set your first <b>port of entry</b> on the
@@ -123,10 +177,43 @@
   <div id="status"></div>
 </main>
 
+<div class="modal" id="modal" hidden>
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2 id="mTitle">Tracking details</h2>
+      <span class="spacer"></span>
+      <button type="button" class="ghost" id="mClose">✕</button>
+    </div>
+    <div class="sheet-body" id="mBody"></div>
+    <div class="sheet-foot">
+      <button type="button" class="ghost" id="mEdit">Edit</button>
+      <button type="button" id="mCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const API = "/api/v1";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Loaded watches keyed by id ({ w, snaps, signal }) so the Details/Edit buttons can act
+// on the full record without re-fetching. id of the watch currently being edited, or null.
+const state = { byId: {}, editingId: null };
+
+// Mirror of the backend's Watch.resolved_legs: normalize any trip shape into the ordered
+// list of legs the watch tracks — so Details can show every leg (incl. a 6-leg multi-city)
+// regardless of whether a snapshot has been recorded yet.
+function watchLegs(w) {
+  if (w.trip_type === "multi_city" && w.legs && w.legs.length) {
+    return w.legs.map((l) => ({ origin: l.origin, destination: l.destination, date: l.date, flex_days: l.flex_days }));
+  }
+  const legs = [{ origin: w.origin, destination: w.destination, date: w.departure_date, flex_days: w.depart_flex_days }];
+  if (w.trip_type === "round_trip" && w.return_date) {
+    legs.push({ origin: w.destination, destination: w.origin, date: w.return_date, flex_days: w.return_flex_days });
+  }
+  return legs;
+}
 
 async function jget(url) {
   const r = await fetch(url);
@@ -226,6 +313,8 @@ function card(w, snaps, signal) {
       ${badge(signal, snaps.length > 0)}
       <span class="meta">${snaps.length} snapshot${snaps.length === 1 ? "" : "s"}</span>
       <span class="spacer"></span>
+      <button class="ghost details">Details</button>
+      <button class="ghost edit">Edit</button>
       <button class="ghost del">Delete</button>
     </div>
   </div>`;
@@ -250,6 +339,8 @@ async function load() {
       ]);
       return { w, snaps, signal };
     }));
+    state.byId = {};
+    enriched.forEach((e) => (state.byId[e.w.id] = e));
     $("cards").innerHTML = enriched.map(({ w, snaps, signal }) => card(w, snaps, signal)).join("");
   } catch (e) {
     $("cards").innerHTML = "";
@@ -257,16 +348,17 @@ async function load() {
   }
 }
 
-// One leg-builder row for multi-city.
-function addLegRow(origin = "", dest = "") {
+// One leg-builder row for multi-city. Accepts initial values so the edit flow can
+// re-hydrate an existing watch's legs.
+function addLegRow(origin = "", dest = "", date = "", flex = 0) {
   const row = document.createElement("div");
   row.className = "legrow";
   row.innerHTML =
     `<input class="lo" maxlength="3" placeholder="From" value="${origin}">` +
     `<span class="arrow">→</span>` +
     `<input class="ld" maxlength="3" placeholder="To" value="${dest}">` +
-    `<input class="ldate" type="date">` +
-    `<input class="lflex" type="number" min="0" max="21" value="0" title="± days">` +
+    `<input class="ldate" type="date" value="${date}">` +
+    `<input class="lflex" type="number" min="0" max="21" value="${flex}" title="± days">` +
     `<button type="button" class="ghost rmLeg" title="Remove leg">✕</button>`;
   $("legRows").appendChild(row);
 }
@@ -322,14 +414,15 @@ $("addForm").addEventListener("submit", async (e) => {
       body.return_flex_days = Number($("returnFlex").value) || 0;
     }
   }
-  const r = await fetch(API + "/watches", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  const editing = state.editingId;
+  const r = await fetch(API + "/watches" + (editing ? "/" + editing : ""), {
+    method: editing ? "PUT" : "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
   });
   if (r.status === 401) { location.href = "/login"; return; }
   if (r.ok) {
-    $("addForm").reset();
-    $("legRows").innerHTML = "";
-    syncTripType();
+    cancelEdit();          // resets the form, clears legs, and re-syncs the trip type
     load();
   } else {
     let d = `Could not add watch (${r.status}).`;
@@ -337,6 +430,101 @@ $("addForm").addEventListener("submit", async (e) => {
     $("status").innerHTML = `<div class="error">${d}</div>`;
   }
 });
+
+// --- Edit mode: reuse the add form, pre-filled, switched to PUT --------------
+function fillForm(w) {
+  $("tripType").value = w.trip_type;
+  $("legRows").innerHTML = "";
+  if (w.trip_type === "multi_city") {
+    (w.legs || []).forEach((l) => addLegRow(l.origin, l.destination, l.date, l.flex_days));
+  }
+  syncTripType(); // sets required flags + visibility; seeds legs only if still empty
+  $("cabin").value = w.cabin;
+  $("origin").value = w.origin || "";
+  $("destination").value = w.destination || "";
+  $("date").value = w.departure_date || "";
+  $("departFlex").value = w.depart_flex_days || 0;
+  $("returnDate").value = w.return_date || "";
+  $("returnFlex").value = w.return_flex_days || 0;
+}
+
+function startEdit(id) {
+  const e = state.byId[id];
+  if (!e) return;
+  closeModal();
+  state.editingId = id;
+  fillForm(e.w);
+  $("editLabel").textContent = "Editing: " + routeLabel(e.w) + " (price history is kept)";
+  $("editBar").hidden = false;
+  $("submitBtn").textContent = "Save changes";
+  $("status").innerHTML = "";
+  $("addForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// Also the post-submit reset for the add flow (editingId stays null there).
+function cancelEdit() {
+  state.editingId = null;
+  $("addForm").reset();
+  $("legRows").innerHTML = "";
+  $("editBar").hidden = true;
+  $("submitBtn").textContent = "+ Track";
+  syncTripType();
+}
+$("cancelEdit").addEventListener("click", cancelEdit);
+
+// --- View details modal ------------------------------------------------------
+function closeModal() { $("modal").hidden = true; $("modal").dataset.id = ""; }
+
+function openDetails(id) {
+  const e = state.byId[id];
+  if (!e) return;
+  const { w, snaps, signal } = e;
+  const latest = snaps.length ? snaps[0] : null;
+  const legs = watchLegs(w);
+  // Latest snapshot's per-leg prices line up with the configured legs in order.
+  const priced = latest && latest.legs ? latest.legs : [];
+  const rows = legs.map((l, i) => {
+    const p = priced[i];
+    const priceCell = p
+      ? fmt(p.price) + (p.date && p.date !== l.date ? ` <span class="meta">@${p.date}</span>` : "")
+      : "—";
+    return `<tr>
+      <td>${i + 1}</td>
+      <td>${l.origin} → ${l.destination}</td>
+      <td>${l.date}${l.flex_days > 0 ? ` <span class="meta">(+${l.flex_days}d)</span>` : ""}</td>
+      <td class="num">${priceCell}</td>
+    </tr>`;
+  }).join("");
+  const tripName = { one_way: "One-way", round_trip: "Round-trip", multi_city: "Multi-city" }[w.trip_type] || w.trip_type;
+  const created = w.created_at ? new Date(w.created_at).toLocaleString() : "—";
+  const observedAt = latest ? new Date(latest.observed_at).toLocaleString() : null;
+  let sig = "no data yet";
+  if (signal && signal.detected) sig = `▼ Bucket reopened −${fmt(signal.signal.drop_pct)}%`;
+  else if (snaps.length) sig = "watching";
+  $("mTitle").textContent = routeLabel(w);
+  $("mBody").innerHTML = `
+    <dl class="kv">
+      <dt>Trip type</dt><dd>${tripName}${w.active ? "" : " · paused"}</dd>
+      <dt>Cabin</dt><dd>${w.cabin}</dd>
+      ${w.owner_email ? `<dt>Owner</dt><dd>${w.owner_email}</dd>` : ""}
+      <dt>Created</dt><dd>${created}</dd>
+      <dt>Snapshots</dt><dd>${snaps.length}</dd>
+      <dt>Latest total</dt><dd>${latest ? fmt(latest.price) + " " + latest.currency + (observedAt ? ` · ${observedAt}` : "") : "—"}</dd>
+      <dt>Signal</dt><dd>${sig}</dd>
+    </dl>
+    <p class="seclabel">Legs (${legs.length})</p>
+    <table class="legtab">
+      <thead><tr><th>#</th><th>Route</th><th>Date (± flex)</th><th class="num">Latest price</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  $("modal").dataset.id = id;
+  $("modal").hidden = false;
+}
+$("mClose").addEventListener("click", closeModal);
+$("mCloseBtn").addEventListener("click", closeModal);
+$("mEdit").addEventListener("click", () => { const id = $("modal").dataset.id; if (id) startEdit(id); });
+$("modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("modal").hidden) closeModal(); });
 
 $("refresh").addEventListener("click", load);
 
@@ -346,11 +534,17 @@ $("logout").addEventListener("click", async () => {
 });
 
 $("cards").addEventListener("click", async (e) => {
-  if (!e.target.classList.contains("del")) return;
-  const id = e.target.closest(".card").dataset.id;
-  if (!confirm("Delete this watch and its price history?")) return;
-  await fetch(`${API}/watches/${id}`, { method: "DELETE" });
-  load();
+  const card = e.target.closest(".card");
+  if (!card) return;
+  const id = card.dataset.id;
+  if (e.target.classList.contains("details")) { openDetails(id); return; }
+  if (e.target.classList.contains("edit")) { startEdit(id); return; }
+  if (e.target.classList.contains("del")) {
+    if (!confirm("Delete this watch and its price history?")) return;
+    await fetch(`${API}/watches/${id}`, { method: "DELETE" });
+    if (state.editingId === id) cancelEdit();
+    load();
+  }
 });
 
 load();

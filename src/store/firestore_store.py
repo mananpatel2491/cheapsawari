@@ -132,6 +132,43 @@ class FirestoreWatchRepository(WatchRepository):
         doc = self._db.collection(_WATCHES).document(watch_id).get()
         return self._to_watch(doc) if doc.exists else None
 
+    def update_watch(self, watch_id: str, data: WatchCreate) -> Watch:
+        ref = self._db.collection(_WATCHES).document(watch_id)
+        snap = ref.get()
+        if not snap.exists:
+            raise WatchNotFoundError(watch_id)
+        existing = self._to_watch(snap)
+        updated = Watch(
+            id=existing.id,
+            origin=data.origin.upper(),
+            destination=data.destination.upper(),
+            departure_date=data.departure_date,
+            cabin=data.cabin.upper(),
+            active=existing.active,
+            created_at=existing.created_at,
+            trip_type=data.trip_type,
+            return_date=data.return_date,
+            depart_flex_days=data.depart_flex_days,
+            return_flex_days=data.return_flex_days,
+            owner_email=existing.owner_email,
+            legs=data.legs,
+        )
+        # Only the trip-definition fields change; identity/lifecycle/owner are left intact.
+        ref.update(
+            {
+                "origin": updated.origin,
+                "destination": updated.destination,
+                "departure_date": updated.departure_date.isoformat(),
+                "cabin": updated.cabin,
+                "trip_type": updated.trip_type,
+                "return_date": updated.return_date.isoformat() if updated.return_date else None,
+                "depart_flex_days": updated.depart_flex_days,
+                "return_flex_days": updated.return_flex_days,
+                "legs": _dump_legs(updated.legs),
+            }
+        )
+        return updated
+
     def list_watches(self, active_only: bool = False, owner_email: str | None = None) -> list[Watch]:
         # Filter in Python (personal scale = few watches) to avoid composite indexes.
         watches = [self._to_watch(d) for d in self._db.collection(_WATCHES).stream()]
