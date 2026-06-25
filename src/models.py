@@ -103,6 +103,13 @@ class WatchCreate(BaseModel):
     legs: list[TripLeg] | None = Field(
         None, description="Ordered legs for multi_city (2..MAX_LEGS). Ignored otherwise."
     )
+    # Slice 16 — per-watch notification preference. The drop (% below the trailing
+    # average) that fires a "bucket reopened" alert for THIS watch. None = use the
+    # server default (SIGNAL_THRESHOLD_PCT). 1..90 keeps it a sane percentage.
+    alert_threshold_pct: float | None = Field(
+        None, ge=1, le=90,
+        description="Per-watch alert threshold (% drop). None uses the server default.",
+    )
 
     @model_validator(mode="after")
     def _check_trip(self) -> "WatchCreate":

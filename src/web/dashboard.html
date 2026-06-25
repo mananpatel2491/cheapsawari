@@ -4,15 +4,46 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>cheapsawari — fare bucket tracker</title>
+<script>
+  // Apply the saved theme BEFORE first paint so there's no flash of the default skin.
+  try { document.documentElement.setAttribute("data-theme", localStorage.getItem("cs_theme") || "midnight"); } catch (e) {}
+</script>
 <style>
-  :root {
-    /* color-scheme: dark makes the browser render native controls — including the
-       <input type="date"> calendar picker and its popup — in dark mode, so the
-       date picker is legible against this theme instead of black-on-dark. */
+  /* --- Themes (Slice 16) -------------------------------------------------------
+     Five skins, selected by a `data-theme` attribute on <html> (cycled by the header
+     button, persisted in localStorage). Each sets the same palette variables + a
+     `color-scheme` so native controls — notably the <input type=date> calendar
+     picker/popup — render light-on-light or light-on-dark to stay legible (which is
+     why no manual icon-invert hack is needed). :root is the default (midnight). */
+  :root, html[data-theme="midnight"] {
     color-scheme: dark;
     --bg: #0f1419; --panel: #1a2129; --line: #2a3441; --text: #e6edf3;
-    --muted: #8b98a5; --accent: #4cc9f0; --good: #2ecc71; --good-bg: #173d2a;
-    --warn: #f0a04c;
+    --muted: #8b98a5; --accent: #4cc9f0; --btn-text: #03242e;
+    --good: #2ecc71; --good-bg: #173d2a; --warn: #f0a04c; --error: #ff6b6b;
+  }
+  html[data-theme="nord"] {
+    color-scheme: dark;
+    --bg: #2e3440; --panel: #3b4252; --line: #4c566a; --text: #eceff4;
+    --muted: #9aa5b8; --accent: #88c0d0; --btn-text: #16202b;
+    --good: #a3be8c; --good-bg: #3a472f; --warn: #ebcb8b; --error: #bf616a;
+  }
+  html[data-theme="forest"] {
+    color-scheme: dark;
+    --bg: #0e1a14; --panel: #16241c; --line: #24382c; --text: #e6f0e8;
+    --muted: #84a08e; --accent: #5eead4; --btn-text: #042b25;
+    --good: #4ade80; --good-bg: #14331f; --warn: #facc15; --error: #f87171;
+  }
+  html[data-theme="daylight"] {
+    color-scheme: light;
+    --bg: #f7f9fc; --panel: #ffffff; --line: #dde3ea; --text: #1b2733;
+    --muted: #5b6b7b; --accent: #2563eb; --btn-text: #ffffff;
+    --good: #15803d; --good-bg: #dcfce7; --warn: #b45309; --error: #dc2626;
+  }
+  html[data-theme="sepia"] {
+    color-scheme: light;
+    --bg: #f4ecd8; --panel: #fbf6ea; --line: #e0d4b8; --text: #433422;
+    --muted: #8a7558; --accent: #9a3412; --btn-text: #fff7ec;
+    --good: #4d7c0f; --good-bg: #e7efce; --warn: #a16207; --error: #b91c1c;
   }
   * { box-sizing: border-box; }
   /* The [hidden] attribute is how we toggle the return-date fields, the multi-city
@@ -21,14 +52,12 @@
      those elements visible — so enforce it. (This is what makes "one-way hides the
      Return date" actually take effect.) */
   [hidden] { display: none !important; }
-  /* Make the date-input calendar icon clearly visible + clickable on the dark theme. */
-  input[type="date"]::-webkit-calendar-picker-indicator {
-    filter: invert(0.85); cursor: pointer; opacity: 0.8;
-  }
-  input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+  /* color-scheme handles the picker's own colors per theme; just make it clickable. */
+  input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; }
   body {
     margin: 0; font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     background: var(--bg); color: var(--text);
+    transition: background .2s ease, color .2s ease;
   }
   header {
     padding: 20px 24px; border-bottom: 1px solid var(--line);
@@ -49,7 +78,7 @@
     border-radius: 6px; padding: 8px 10px; font: inherit; min-width: 90px;
   }
   button {
-    background: var(--accent); color: #03242e; border: 0; border-radius: 6px;
+    background: var(--accent); color: var(--btn-text); border: 0; border-radius: 6px;
     padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer;
   }
   button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
@@ -89,7 +118,7 @@
   .badge.nodata { background: transparent; color: var(--warn); border: 1px solid var(--line); }
   .row2 .spacer { flex: 1; }
   .empty, .error { color: var(--muted); text-align: center; padding: 40px; }
-  .error { color: #ff6b6b; }
+  .error { color: var(--error); }
   a { color: var(--accent); }
   .navlink { font-size: 13px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; text-decoration: none; }
   /* Edit-mode banner across the top of the add/edit form. */
@@ -135,7 +164,8 @@
   <span class="spacer"></span>
   <span class="sub" id="who"></span>
   <a class="navlink" id="adminLink" href="/admin" hidden>Admin</a>
-  <button class="ghost" id="refresh">↻ Refresh</button>
+  <button class="ghost" id="themeBtn" title="Switch color theme">🎨 Theme</button>
+  <button class="ghost" id="reload" title="Re-pull stored data and re-render">↻ Reload</button>
   <button class="ghost" id="logout">Sign out</button>
 </header>
 <main>
@@ -164,6 +194,8 @@
         <option>BUSINESS</option><option>FIRST</option>
       </select>
     </label>
+    <label>Alert −%<input id="alertPct" type="number" min="1" max="90" placeholder="15"
+      title="Email me when the fare drops at least this % below its recent average. Blank = the default (15%)."></label>
     <button type="submit" id="submitBtn">+ Track</button>
     <div class="mc" id="mcBuilder" hidden>
       <div class="mc-hint">Add each leg in order. Tip: route through a city to track a
@@ -313,6 +345,7 @@ function card(w, snaps, signal) {
       ${badge(signal, snaps.length > 0)}
       <span class="meta">${snaps.length} snapshot${snaps.length === 1 ? "" : "s"}</span>
       <span class="spacer"></span>
+      <button class="ghost refetch" title="Fetch the latest fare now">↻ Refresh</button>
       <button class="ghost details">Details</button>
       <button class="ghost edit">Edit</button>
       <button class="ghost del">Delete</button>
@@ -387,6 +420,9 @@ $("legRows").addEventListener("click", (e) => {
 $("addForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const tripType = $("tripType").value;
+  // Per-watch notify threshold (Slice 16): optional; blank = server default.
+  const alertRaw = $("alertPct").value.trim();
+  const alertThreshold = alertRaw === "" ? null : Number(alertRaw);
   let body;
   if (tripType === "multi_city") {
     const legs = [...$("legRows").children].map((row) => ({
@@ -414,6 +450,7 @@ $("addForm").addEventListener("submit", async (e) => {
       body.return_flex_days = Number($("returnFlex").value) || 0;
     }
   }
+  if (alertThreshold !== null) body.alert_threshold_pct = alertThreshold;
   const editing = state.editingId;
   const r = await fetch(API + "/watches" + (editing ? "/" + editing : ""), {
     method: editing ? "PUT" : "POST",
@@ -446,6 +483,7 @@ function fillForm(w) {
   $("departFlex").value = w.depart_flex_days || 0;
   $("returnDate").value = w.return_date || "";
   $("returnFlex").value = w.return_flex_days || 0;
+  $("alertPct").value = w.alert_threshold_pct != null ? w.alert_threshold_pct : "";
 }
 
 function startEdit(id) {
@@ -506,6 +544,7 @@ function openDetails(id) {
     <dl class="kv">
       <dt>Trip type</dt><dd>${tripName}${w.active ? "" : " · paused"}</dd>
       <dt>Cabin</dt><dd>${w.cabin}</dd>
+      <dt>Alert at</dt><dd>${w.alert_threshold_pct != null ? "−" + fmt(w.alert_threshold_pct) + "% (custom)" : "default (−15%)"}</dd>
       ${w.owner_email ? `<dt>Owner</dt><dd>${w.owner_email}</dd>` : ""}
       <dt>Created</dt><dd>${created}</dd>
       <dt>Snapshots</dt><dd>${snaps.length}</dd>
@@ -526,7 +565,23 @@ $("mEdit").addEventListener("click", () => { const id = $("modal").dataset.id; i
 $("modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("modal").hidden) closeModal(); });
 
-$("refresh").addEventListener("click", load);
+$("reload").addEventListener("click", load);
+
+// --- Theme toggle: cycle 5 skins, persist in localStorage --------------------
+const THEMES = ["midnight", "nord", "forest", "daylight", "sepia"];
+const THEME_LABELS = { midnight: "Midnight", nord: "Nord", forest: "Forest", daylight: "Daylight", sepia: "Sepia" };
+function applyTheme(t) {
+  if (!THEMES.includes(t)) t = "midnight";
+  document.documentElement.setAttribute("data-theme", t);
+  $("themeBtn").textContent = "🎨 " + THEME_LABELS[t];
+  try { localStorage.setItem("cs_theme", t); } catch (e) {}
+}
+$("themeBtn").addEventListener("click", () => {
+  const cur = document.documentElement.getAttribute("data-theme") || "midnight";
+  applyTheme(THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length]);
+});
+// Sync the button label to the theme the no-flash head script already applied.
+applyTheme(document.documentElement.getAttribute("data-theme") || "midnight");
 
 $("logout").addEventListener("click", async () => {
   await fetch("/api/v1/auth/logout", { method: "POST" });
@@ -537,6 +592,35 @@ $("cards").addEventListener("click", async (e) => {
   const card = e.target.closest(".card");
   if (!card) return;
   const id = card.dataset.id;
+  if (e.target.classList.contains("refetch")) {
+    // Genuine live refresh: fetch the latest fare from the provider now (POST .../refresh),
+    // which records a snapshot — distinct from the header Reload (which only re-renders).
+    const btn = e.target;
+    btn.disabled = true;
+    const was = btn.textContent;
+    btn.textContent = "…";
+    $("status").innerHTML = "";
+    try {
+      const r = await fetch(`${API}/watches/${id}/refresh`, { method: "POST" });
+      if (r.status === 401) { location.href = "/login"; return; }
+      if (r.ok) {
+        const j = await r.json();
+        if (!j.recorded) {
+          $("status").innerHTML = `<div class="empty">No fare available right now${j.reason ? " (" + j.reason + ")" : ""}.</div>`;
+        }
+        await load();
+      } else {
+        let d = `Refresh failed (${r.status}).`;
+        try { const j = await r.json(); if (typeof j.detail === "string") d = j.detail; } catch {}
+        $("status").innerHTML = `<div class="error">${d}</div>`;
+        btn.disabled = false; btn.textContent = was;
+      }
+    } catch (err) {
+      $("status").innerHTML = `<div class="error">Refresh failed: ${err.message}</div>`;
+      btn.disabled = false; btn.textContent = was;
+    }
+    return;
+  }
   if (e.target.classList.contains("details")) { openDetails(id); return; }
   if (e.target.classList.contains("edit")) { startEdit(id); return; }
   if (e.target.classList.contains("del")) {

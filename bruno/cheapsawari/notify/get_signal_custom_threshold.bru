@@ -1,0 +1,24 @@
+meta {
+  name: Notify · signal fires at the watch's custom 8% threshold
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/watches/{{notifyId}}/signal
+}
+
+docs {
+  Slice 16: detection uses the watch's alert_threshold_pct (8), so the 9% drop is a
+  reopening. threshold_pct in the result echoes 8 (not the 15 default), and the signal
+  now carries the route (origin/destination) for the alert/email subject line.
+}
+
+assert {
+  res.status: eq 200
+  res.body.detected: eq true
+  res.body.signal.threshold_pct: eq 8
+  res.body.signal.drop_pct: eq 9
+  res.body.signal.origin: eq DTW
+  res.body.signal.destination: eq AMD
+}

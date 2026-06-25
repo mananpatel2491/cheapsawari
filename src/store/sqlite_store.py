@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS watches (
     depart_flex_days INTEGER NOT NULL DEFAULT 0,
     return_flex_days INTEGER NOT NULL DEFAULT 0,
     owner_email      TEXT,
-    legs_json        TEXT
+    legs_json        TEXT,
+    alert_threshold_pct REAL
 );
 CREATE TABLE IF NOT EXISTS snapshots (
     id          TEXT PRIMARY KEY,
@@ -70,6 +71,7 @@ _MIGRATIONS = {
         ("return_flex_days", "INTEGER NOT NULL DEFAULT 0"),
         ("owner_email", "TEXT"),  # Slice 8 — per-user ownership
         ("legs_json", "TEXT"),    # Slice 9 — multi-city legs
+        ("alert_threshold_pct", "REAL"),  # Slice 16 — per-watch notify threshold
     ],
     "snapshots": [
         ("outbound_price", "REAL"),
@@ -129,6 +131,7 @@ class SqliteWatchRepository(WatchRepository):
             return_flex_days=row["return_flex_days"],
             owner_email=row["owner_email"],
             legs=[TripLeg(**d) for d in json.loads(row["legs_json"])] if row["legs_json"] else None,
+            alert_threshold_pct=row["alert_threshold_pct"],
         )
 
     @staticmethod
@@ -166,12 +169,14 @@ class SqliteWatchRepository(WatchRepository):
             return_flex_days=data.return_flex_days,
             owner_email=owner_email,
             legs=data.legs,
+            alert_threshold_pct=data.alert_threshold_pct,
         )
         with self._conn() as conn:
             conn.execute(
                 "INSERT INTO watches (id, origin, destination, departure_date, cabin, active, "
-                "created_at, trip_type, return_date, depart_flex_days, return_flex_days, owner_email, legs_json) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "created_at, trip_type, return_date, depart_flex_days, return_flex_days, owner_email, "
+                "legs_json, alert_threshold_pct) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     watch.id,
                     watch.origin,
@@ -186,6 +191,7 @@ class SqliteWatchRepository(WatchRepository):
                     watch.return_flex_days,
                     watch.owner_email,
                     _dump_legs(watch.legs),
+                    watch.alert_threshold_pct,
                 ),
             )
         return watch
@@ -214,11 +220,13 @@ class SqliteWatchRepository(WatchRepository):
             return_flex_days=data.return_flex_days,
             owner_email=existing.owner_email,
             legs=data.legs,
+            alert_threshold_pct=data.alert_threshold_pct,
         )
         with self._conn() as conn:
             conn.execute(
                 "UPDATE watches SET origin = ?, destination = ?, departure_date = ?, cabin = ?, "
-                "trip_type = ?, return_date = ?, depart_flex_days = ?, return_flex_days = ?, legs_json = ? "
+                "trip_type = ?, return_date = ?, depart_flex_days = ?, return_flex_days = ?, legs_json = ?, "
+                "alert_threshold_pct = ? "
                 "WHERE id = ?",
                 (
                     updated.origin,
@@ -230,6 +238,7 @@ class SqliteWatchRepository(WatchRepository):
                     updated.depart_flex_days,
                     updated.return_flex_days,
                     _dump_legs(updated.legs),
+                    updated.alert_threshold_pct,
                     updated.id,
                 ),
             )

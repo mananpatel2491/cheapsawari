@@ -1,0 +1,22 @@
+meta {
+  name: Notify · seed baseline price 100 (#1)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches/{{notifyId}}/snapshots
+  body: json
+}
+
+body:json {
+  {
+    "price": 100,
+    "observed_at": "2026-06-20T00:00:00Z"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.price: eq 100
+}

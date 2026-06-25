@@ -1,0 +1,35 @@
+meta {
+  name: Notify · create a watch with a custom alert threshold (captures id)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/watches
+  body: json
+}
+
+body:json {
+  {
+    "origin": "dtw",
+    "destination": "amd",
+    "departure_date": "2026-12-08",
+    "cabin": "economy",
+    "alert_threshold_pct": 8
+  }
+}
+
+vars:post-response {
+  notifyId: res.body.id
+}
+
+docs {
+  Slice 16: a watch carries a per-watch notification preference. A 9% drop will NOT
+  fire at the server default (15%) but MUST fire at this watch's 8% threshold.
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isString
+  res.body.alert_threshold_pct: eq 8
+}

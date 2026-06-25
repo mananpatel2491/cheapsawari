@@ -443,12 +443,12 @@ def get_signal(
     """
     repo = get_repository()
     settings = get_settings()
-    _owned_watch(repo, watch_id, user)
+    watch = _owned_watch(repo, watch_id, user)
     snapshots = repo.list_snapshots(watch_id, limit=1000)
 
-    signal = detect_reopening(
-        snapshots, settings.signal_threshold_pct, settings.signal_window_days
-    )
+    # Per-watch notify preference (Slice 16) wins over the server default.
+    threshold = watch.alert_threshold_pct or settings.signal_threshold_pct
+    signal = detect_reopening(snapshots, threshold, settings.signal_window_days)
     return SignalResult(watch_id=watch_id, detected=signal is not None, signal=signal)
 
 

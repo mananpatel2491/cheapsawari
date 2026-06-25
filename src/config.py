@@ -65,6 +65,21 @@ class Settings(BaseModel):
     alert_webhook_url: str | None = None
     signal_threshold_pct: float = 15.0
     signal_window_days: int = 7
+    # --- Slice 16: email notifications (stdlib SMTP; Gmail-ready, ~$0) ---
+    # Set ALERT_CHANNEL=email to deliver reopened-bucket alerts to each watch owner's
+    # email. For Gmail: SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER=<the gmail>,
+    # SMTP_PASSWORD=<a 16-char App Password> (needs 2FA on the account), ALERT_EMAIL_FROM=
+    # <the gmail>. ALERT_EMAIL_TO is an optional fallback recipient when a watch has no
+    # owner_email. If SMTP is unconfigured, the channel degrades to log (alerts still
+    # surface, just aren't emailed). app_base_url is linked in the email body.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_use_tls: bool = True
+    alert_email_from: str | None = None
+    alert_email_to: str | None = None
+    app_base_url: str = "https://cheapsawari.web.app"
     # --- Slice 6: auth + admin (Google Identity Services) ---
     # auth_mode: "google" (prod; "Sign in with Google", verifies the Google ID token) or
     #   "dev" (local/tests; a passwordless email login so the gate is exercisable without
@@ -103,6 +118,14 @@ def get_settings() -> Settings:
         alert_webhook_url=os.getenv("ALERT_WEBHOOK_URL") or None,
         signal_threshold_pct=float(os.getenv("SIGNAL_THRESHOLD_PCT", "15.0")),
         signal_window_days=int(os.getenv("SIGNAL_WINDOW_DAYS", "7")),
+        smtp_host=os.getenv("SMTP_HOST") or None,
+        smtp_port=int(os.getenv("SMTP_PORT", "587")),
+        smtp_user=os.getenv("SMTP_USER") or None,
+        smtp_password=os.getenv("SMTP_PASSWORD") or None,
+        smtp_use_tls=os.getenv("SMTP_USE_TLS", "true").strip().lower() != "false",
+        alert_email_from=os.getenv("ALERT_EMAIL_FROM") or None,
+        alert_email_to=os.getenv("ALERT_EMAIL_TO") or None,
+        app_base_url=os.getenv("APP_BASE_URL", "https://cheapsawari.web.app").rstrip("/"),
         auth_mode=os.getenv("AUTH_MODE", "dev").strip().lower(),
         google_client_id=os.getenv("GOOGLE_CLIENT_ID") or None,
         admin_email=os.getenv("ADMIN_EMAIL", "mpatel.mi24@gmail.com").strip().lower(),

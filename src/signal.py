@@ -44,6 +44,10 @@ class Signal(BaseModel):
     observed_at: object = Field(..., description="When the triggering fare was observed (UTC).")
     window_days: int = Field(..., description="Trailing window used for the baseline.")
     threshold_pct: float = Field(..., description="Drop threshold that was crossed.")
+    # Slice 16 — route of the triggering snapshot (from its legs), so an alert/email
+    # reads as a place, not a UUID. Optional: legacy snapshots may carry no legs.
+    origin: str | None = Field(None, description="Trip origin (first leg).")
+    destination: str | None = Field(None, description="Trip destination (last leg).")
 
 
 class SignalResult(BaseModel):
@@ -109,6 +113,10 @@ def detect_reopening(
 
     current = points[last]
     drop_pct = round((baseline - current.price) / baseline * 100, 2)
+    origin = destination = None
+    if current.legs:
+        origin = current.legs[0].origin
+        destination = current.legs[-1].destination
     return Signal(
         watch_id=current.watch_id,
         current_price=current.price,
@@ -119,4 +127,6 @@ def detect_reopening(
         observed_at=current.observed_at,
         window_days=window_days,
         threshold_pct=threshold_pct,
+        origin=origin,
+        destination=destination,
     )

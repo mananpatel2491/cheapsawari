@@ -19,8 +19,14 @@ class AlertError(RuntimeError):
 
 def render_text(signal: Signal) -> str:
     """Human-readable one-liner shared by every channel."""
+    # Prefer the route (Slice 16) so the alert reads as a place, not a UUID.
+    subject = (
+        f"{signal.origin}→{signal.destination}"
+        if signal.origin and signal.destination
+        else f"watch {signal.watch_id}"
+    )
     return (
-        f"✈️ Bucket reopened for watch {signal.watch_id}: "
+        f"✈️ Bucket reopened for {subject}: "
         f"{signal.currency} {signal.current_price:.2f} "
         f"({signal.drop_pct:.1f}% below the {signal.window_days}-day avg of "
         f"{signal.currency} {signal.baseline_price:.2f})"
@@ -34,5 +40,10 @@ class AlertChannel(abc.ABC):
     name: str
 
     @abc.abstractmethod
-    def send(self, signal: Signal) -> None:
-        """Deliver one alert. Raise :class:`AlertError` on delivery failure."""
+    def send(self, signal: Signal, recipient: str | None = None) -> None:
+        """Deliver one alert. Raise :class:`AlertError` on delivery failure.
+
+        ``recipient`` is the per-alert destination address for channels that target a
+        person (the email channel sends to the watch owner). Channels with a fixed
+        destination (log, webhook) ignore it.
+        """

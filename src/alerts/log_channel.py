@@ -17,5 +17,5 @@ _log = logging.getLogger("cheapsawari.alerts")
 class LogAlertChannel(AlertChannel):
     name = "log"
 
-    def send(self, signal: Signal) -> None:
+    def send(self, signal: Signal, recipient: str | None = None) -> None:
         _log.warning("ALERT %s", render_text(signal))

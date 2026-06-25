@@ -70,6 +70,7 @@ class FirestoreWatchRepository(WatchRepository):
             return_flex_days=int(d.get("return_flex_days", 0)),
             owner_email=d.get("owner_email"),
             legs=[TripLeg(**leg) for leg in d["legs"]] if d.get("legs") else None,
+            alert_threshold_pct=d.get("alert_threshold_pct"),
         )
 
     @staticmethod
@@ -109,6 +110,7 @@ class FirestoreWatchRepository(WatchRepository):
             return_flex_days=data.return_flex_days,
             owner_email=owner_email,
             legs=data.legs,
+            alert_threshold_pct=data.alert_threshold_pct,
         )
         self._db.collection(_WATCHES).document(watch.id).set(
             {
@@ -124,6 +126,7 @@ class FirestoreWatchRepository(WatchRepository):
                 "return_flex_days": watch.return_flex_days,
                 "owner_email": watch.owner_email,
                 "legs": _dump_legs(watch.legs),
+                "alert_threshold_pct": watch.alert_threshold_pct,
             }
         )
         return watch
@@ -152,6 +155,7 @@ class FirestoreWatchRepository(WatchRepository):
             return_flex_days=data.return_flex_days,
             owner_email=existing.owner_email,
             legs=data.legs,
+            alert_threshold_pct=data.alert_threshold_pct,
         )
         # Only the trip-definition fields change; identity/lifecycle/owner are left intact.
         ref.update(
@@ -165,6 +169,7 @@ class FirestoreWatchRepository(WatchRepository):
                 "depart_flex_days": updated.depart_flex_days,
                 "return_flex_days": updated.return_flex_days,
                 "legs": _dump_legs(updated.legs),
+                "alert_threshold_pct": updated.alert_threshold_pct,
             }
         )
         return updated

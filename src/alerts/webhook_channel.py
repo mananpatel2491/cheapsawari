@@ -20,7 +20,7 @@ class WebhookAlertChannel(AlertChannel):
         self._url = url
         self._timeout = timeout_s
 
-    def send(self, signal: Signal) -> None:
+    def send(self, signal: Signal, recipient: str | None = None) -> None:
         payload = {"text": render_text(signal), "signal": signal.model_dump(mode="json")}
         try:
             resp = httpx.post(self._url, json=payload, timeout=self._timeout)

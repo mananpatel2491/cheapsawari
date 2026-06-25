@@ -96,13 +96,17 @@ def poll_active_watches(
         # Detect on the freshly extended series; one watch's hiccup must not
         # sink the whole scheduled run.
         try:
+            # Per-watch notify preference (Slice 16) wins over the server default.
+            watch_threshold = watch.alert_threshold_pct or threshold_pct
             signal = detect_reopening(
-                repo.list_snapshots(watch.id), threshold_pct, window_days
+                repo.list_snapshots(watch.id), watch_threshold, window_days
             )
             if signal is not None:
-                alerter.send(signal)
+                # Deliver to the watch owner (the email on their Google account); the
+                # log/webhook channels ignore the recipient.
+                alerter.send(signal, recipient=watch.owner_email)
                 alerts_fired += 1
-                obs.event(_log, "alert.fired", watch_id=watch.id,
+                obs.event(_log, "alert.fired", watch_id=watch.id, recipient=watch.owner_email,
                           drop_pct=signal.drop_pct, price=signal.current_price)
         except AlertError as exc:
             obs.event(_log, "alert.error", level=logging.WARNING,
