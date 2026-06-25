@@ -8,6 +8,7 @@ return a normalized Offer. All the data-source complexity lives behind FareProvi
 """
 from __future__ import annotations
 
+import logging
 from datetime import date as _date
 from datetime import datetime, timezone
 from pathlib import Path as _Path
@@ -16,7 +17,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Path, Query, Reques
 from fastapi.responses import FileResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import auth
+from . import auth, obs
 from .alerts import get_alert_channel
 from .config import get_settings
 from .models import (
@@ -36,6 +37,15 @@ from .signal import SignalResult, detect_reopening
 from .store import get_repository
 from .trip import price_watch_trip
 from .users import get_user_repository
+
+# Structured logging (see src/obs.py + docs/LOGGING.md). Configured once at import so it
+# is active however the app is launched (uvicorn, tests). NB: a sign-in that Google blocks
+# upstream (e.g. OAuth consent screen in "Testing" mode) never reaches the app, so it won't
+# appear in our logs — only app-side decisions do.
+obs.configure_logging()
+_log = obs.get_logger("auth")
+_wlog = obs.get_logger("watch")
+_plog = obs.get_logger("provider")
 
 app = FastAPI(
     title="cheapsawari API",
@@ -121,15 +131,23 @@ def auth_google(request: Request, body: dict) -> SessionUser:
     """
     credential = (body or {}).get("credential")
     if not credential:
+        obs.event(_log, "auth.login", level=logging.WARNING,
+                  outcome="denied", provider="google", reason="missing_credential")
         raise HTTPException(status_code=400, detail="Missing 'credential'.")
     try:
         email = auth.verify_google_credential(credential)
     except auth.AuthError as exc:
+        obs.event(_log, "auth.login", level=logging.WARNING,
+                  outcome="denied", provider="google", reason="invalid_token", detail=str(exc))
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     if not auth.is_access_allowed(email):
+        obs.event(_log, "auth.login", level=logging.WARNING,
+                  outcome="denied", provider="google", email=email, reason="not_allowlisted")
         raise HTTPException(status_code=403, detail=f"{email} is not on the allowlist.")
     auth.login_session(request, email)
-    return SessionUser(email=email, is_admin=auth.is_admin(email))
+    is_admin = auth.is_admin(email)
+    obs.event(_log, "auth.login", outcome="ok", provider="google", email=email, admin=is_admin)
+    return SessionUser(email=email, is_admin=is_admin)
 
 
 @app.post("/api/v1/auth/dev", response_model=SessionUser, tags=["auth"])
@@ -143,17 +161,25 @@ def auth_dev(request: Request, body: dict) -> SessionUser:
         raise HTTPException(status_code=404, detail="Not found.")
     email = ((body or {}).get("email") or "").strip().lower()
     if not email or "@" not in email:
+        obs.event(_log, "auth.login", level=logging.WARNING,
+                  outcome="denied", provider="dev", reason="bad_email")
         raise HTTPException(status_code=400, detail="A valid 'email' is required.")
     if not auth.is_access_allowed(email):
+        obs.event(_log, "auth.login", level=logging.WARNING,
+                  outcome="denied", provider="dev", email=email, reason="not_allowlisted")
         raise HTTPException(status_code=403, detail=f"{email} is not on the allowlist.")
     auth.login_session(request, email)
-    return SessionUser(email=email, is_admin=auth.is_admin(email))
+    is_admin = auth.is_admin(email)
+    obs.event(_log, "auth.login", outcome="ok", provider="dev", email=email, admin=is_admin)
+    return SessionUser(email=email, is_admin=is_admin)
 
 
 @app.post("/api/v1/auth/logout", status_code=204, tags=["auth"])
 def auth_logout(request: Request) -> None:
     """End the session (clears the cookie)."""
+    user = auth.current_user(request)
     auth.logout_session(request)
+    obs.event(_log, "auth.logout", email=user.email if user else None)
 
 
 @app.get("/api/v1/admin/users", response_model=list[AllowedUser], tags=["admin"])
@@ -172,13 +198,15 @@ def admin_add_user(
         raise HTTPException(status_code=400, detail="A valid email is required.")
     if auth.is_admin(email):
         raise HTTPException(status_code=400, detail="The owner already has access.")
-    return get_user_repository().add_user(email, added_by=admin.email)
+    user = get_user_repository().add_user(email, added_by=admin.email)
+    obs.event(_log, "auth.allowlist", action="add", email=email, by=admin.email)
+    return user
 
 
 @app.delete("/api/v1/admin/users/{email}", status_code=204, tags=["admin"])
 def admin_remove_user(
     email: str = Path(..., description="Email to revoke."),
-    _: SessionUser = Depends(auth.require_admin),
+    admin: SessionUser = Depends(auth.require_admin),
 ) -> None:
     """Revoke a user's access (admin only). 400 if you try to remove the owner; 404 if unknown."""
     email = email.strip().lower()
@@ -186,6 +214,7 @@ def admin_remove_user(
         raise HTTPException(status_code=400, detail="The owner cannot be removed.")
     if not get_user_repository().remove_user(email):
         raise HTTPException(status_code=404, detail=f"'{email}' is not on the allowlist.")
+    obs.event(_log, "auth.allowlist", action="remove", email=email, by=admin.email)
 
 
 @app.get(
@@ -247,7 +276,11 @@ def create_watch(data: WatchCreate, user: SessionUser = Depends(auth.require_use
     """
     if data.trip_type != "multi_city" and data.origin.upper() == data.destination.upper():
         raise HTTPException(status_code=400, detail="origin and destination must differ.")
-    return get_repository().create_watch(data, owner_email=user.email)
+    watch = get_repository().create_watch(data, owner_email=user.email)
+    obs.event(_wlog, "watch.create", watch_id=watch.id, owner=watch.owner_email,
+              trip_type=watch.trip_type, route=f"{watch.origin}->{watch.destination}",
+              legs=len(watch.legs) if watch.legs else 1)
+    return watch
 
 
 @app.get("/api/v1/watches", response_model=list[Watch], tags=["watches"])
@@ -276,8 +309,9 @@ def delete_watch(
 ) -> None:
     """Delete one of the caller's watches and its snapshots. 404 if unknown or not theirs."""
     repo = get_repository()
-    _owned_watch(repo, watch_id, user)
+    watch = _owned_watch(repo, watch_id, user)
     repo.delete_watch(watch_id)
+    obs.event(_wlog, "watch.delete", watch_id=watch_id, owner=watch.owner_email, by=user.email)
 
 
 @app.post("/api/v1/watches/{watch_id}/refresh", response_model=RefreshResult, tags=["watches"])
@@ -297,6 +331,8 @@ def refresh_watch(
     try:
         quote = price_watch_trip(get_provider(), watch)
     except ProviderError as exc:
+        obs.event(_plog, "provider.error", level=logging.WARNING, op="refresh",
+                  watch_id=watch_id, provider=get_settings().fare_provider, detail=str(exc))
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     if quote is None:

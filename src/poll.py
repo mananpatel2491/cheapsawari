@@ -15,13 +15,14 @@ import logging
 
 from pydantic import BaseModel, Field
 
+from . import obs
 from .alerts import AlertChannel, AlertError
 from .providers import FareProvider, ProviderError
 from .signal import detect_reopening
 from .store import WatchRepository
 from .trip import price_watch_trip
 
-_log = logging.getLogger("cheapsawari.poll")
+_log = obs.get_logger("poll")
 
 
 class PollSummary(BaseModel):
@@ -75,8 +76,10 @@ def poll_active_watches(
         polled += 1
         try:
             quote = price_watch_trip(provider, watch)
-        except ProviderError:
+        except ProviderError as exc:
             errors += 1
+            obs.event(_log, "provider.error", level=logging.WARNING, op="poll",
+                      watch_id=watch.id, provider=provider.name, detail=str(exc))
             continue
 
         if quote is None:
@@ -99,12 +102,16 @@ def poll_active_watches(
             if signal is not None:
                 alerter.send(signal)
                 alerts_fired += 1
+                obs.event(_log, "alert.fired", watch_id=watch.id,
+                          drop_pct=signal.drop_pct, price=signal.current_price)
         except AlertError as exc:
-            _log.warning("alert delivery failed for watch %s: %s", watch.id, exc)
+            obs.event(_log, "alert.error", level=logging.WARNING,
+                      watch_id=watch.id, detail=str(exc))
         except Exception:  # detection/store hiccup — log and keep polling
-            _log.exception("signal detection failed for watch %s", watch.id)
+            obs.event(_log, "poll.watch_error", level=logging.ERROR,
+                      watch_id=watch.id, exc_info=True)
 
-    return PollSummary(
+    summary = PollSummary(
         active_watches=len(active),
         polled=polled,
         recorded=recorded,
@@ -113,3 +120,6 @@ def poll_active_watches(
         skipped_over_cap=max(0, len(active) - max_per_run),
         alerts_fired=alerts_fired,
     )
+    # One line per run = the daily heartbeat. Search: jsonPayload.event="poll.run".
+    obs.event(_log, "poll.run", **summary.model_dump())
+    return summary
