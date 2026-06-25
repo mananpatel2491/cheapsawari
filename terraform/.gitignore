@@ -1,0 +1,11 @@
+# Terraform state (may contain secrets) and local files — never commit.
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+crash.*.log
+
+# Variable files hold the poll_token secret. Keep the .example only.
+*.tfvars
+!*.tfvars.example

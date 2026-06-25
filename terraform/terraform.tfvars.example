@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (gitignored) and fill in. Defaults in variables.tf already
+# match the live project, so usually you only need the secret below.
+
+# Shared secret for the scheduler's X-Poll-Token header (must equal POLL_TOKEN on the
+# Cloud Run service). Recover the live value with:
+#   gcloud run services describe cheapsawari-api --region us-central1 \
+#     --format='value(spec.template.spec.containers[0].env)'
+poll_token = "REPLACE_WITH_POLL_TOKEN"
+
+# Optional overrides (defaults shown):
+# project_id         = "cheapsawari"
+# project_number     = "444653658968"
+# region             = "us-central1"
+# firestore_location = "us-central1"

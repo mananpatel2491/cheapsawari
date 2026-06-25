@@ -71,7 +71,13 @@ gated, no per-call charge) — so a daily poll adds $0. Caveat: that data is **c
 bookable quote, and per-day cache can be sparse for less-popular routes/dates (those polls return
 "no inventory" until the cache has an entry). `POLL_MAX_PER_RUN=60` is now just a politeness cap.
 
-## Known follow-up
-Infrastructure was provisioned imperatively via `gcloud` (APIs, Firestore DB, Cloud Run,
-Scheduler, IAM). Per AVF Pattern 5 (Infrastructure-as-Code & Cost Gating), codifying these
-in `terraform/` is a tracked follow-up before any GitHub release tagging.
+## Infrastructure-as-Code (AVF Pattern 5) — DONE
+The platform (enabled APIs, Firestore DB, runtime-SA IAM, public-invoker binding, the
+daily Cloud Scheduler job) is codified in **`terraform/`** (`terraform validate` + `plan`
+clean against live GCP). The Cloud Run service + revisions stay with `gcloud run deploy
+--source .` and are read by Terraform as a data source. The infra already exists, so adopt
+it into state with `terraform/import.sh` before `plan`/`apply` (see `terraform/README.md`).
+Cost gate: still **~$0/mo** — the config describes existing infra and provisions nothing new.
+
+Optional future hardening: move app secrets (`POLL_TOKEN`, `TRAVELPAYOUTS_TOKEN`,
+`SESSION_SECRET`, `GOOGLE_CLIENT_ID`) from Cloud Run env vars into Secret Manager.
