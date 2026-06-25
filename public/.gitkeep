@@ -1,0 +1,2 @@
+# Intentionally empty. Firebase Hosting requires a public directory, but every path
+# is rewritten to the Cloud Run service (see firebase.json), so nothing static is served.

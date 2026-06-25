@@ -1,0 +1,13 @@
+{
+  "hosting": {
+    "site": "cheapsawari",
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "**",
+        "run": { "serviceId": "cheapsawari-api", "region": "us-central1" }
+      }
+    ]
+  }
+}
