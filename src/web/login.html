@@ -45,13 +45,10 @@
   <h1>✈️ cheapsawari</h1>
   <div class="sub">fare-bucket tracker — invitation only</div>
   <div id="modePill" class="pill" hidden></div>
+  <!-- Production renders only the Google button here. The dev-mode email login is built
+       dynamically in JS (see below) and ONLY when the server reports AUTH_MODE=dev, so it
+       never ships to the production page (no DOM, no view-source). -->
   <div id="googleBtn" class="signin"></div>
-  <form id="devForm" class="dev" hidden>
-    <label>Email (dev mode)
-      <input id="devEmail" type="email" placeholder="you@example.com" autocomplete="email" required>
-    </label>
-    <button type="submit">Sign in</button>
-  </form>
   <div id="msg" class="msg"></div>
 </div>
 
@@ -90,14 +87,23 @@ async function init() {
     });
     google.accounts.id.renderButton($("googleBtn"), { theme: "filled_blue", size: "large", width: 300 });
   } else {
-    // Dev mode: passwordless email login (allowlist still enforced server-side).
-    $("modePill").hidden = false; $("modePill").textContent = "DEV MODE";
+    // Dev mode ONLY (AUTH_MODE=dev): build a passwordless email login at runtime. This
+    // markup never exists on the production page. The matching /api/v1/auth/dev endpoint
+    // is itself hard-disabled (404) unless AUTH_MODE=dev, so it's defense-in-depth.
+    $("modePill").hidden = false;
+    $("modePill").textContent = "DEV MODE · local only · no password";
     $("googleBtn").hidden = true;
-    $("devForm").hidden = false;
-    $("devForm").addEventListener("submit", (e) => {
+    const form = document.createElement("form");
+    form.className = "dev";
+    form.innerHTML =
+      '<label>Email (dev login — no password, allowlist still enforced)' +
+      '<input id="devEmail" type="email" placeholder="you@example.com" autocomplete="email" required>' +
+      '</label><button type="submit">Sign in</button>';
+    form.addEventListener("submit", (e) => {
       e.preventDefault();
       onCredential(null, { email: $("devEmail").value.trim().toLowerCase() });
     });
+    $("googleBtn").insertAdjacentElement("afterend", form);
   }
 }
 init();
