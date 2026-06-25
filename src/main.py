@@ -9,6 +9,7 @@ return a normalized Offer. All the data-source complexity lives behind FareProvi
 from __future__ import annotations
 
 import logging
+import os
 from datetime import date as _date
 from datetime import datetime, timezone
 from pathlib import Path as _Path
@@ -55,10 +56,17 @@ app = FastAPI(
 
 # Signs an HttpOnly session cookie (Slice 6 auth). The secret must be stable across
 # instances/restarts in prod (set SESSION_SECRET) or sessions silently invalidate.
+#
+# Cookie name MUST be `__session` (Slice 14): Firebase Hosting forwards ONLY a cookie
+# named `__session` to the backend and strips all others — so behind cheapsawari.web.app
+# any other name never reaches Cloud Run and the session silently breaks. `__session`
+# also works on the direct Cloud Run URL. Secure flag is on only on Cloud Run (K_SERVICE),
+# so the cookie still works over http://127.0.0.1 in local dev.
 app.add_middleware(
     SessionMiddleware,
     secret_key=get_settings().session_secret,
-    https_only=False,  # Cloud Run terminates TLS at the proxy; the app sees http internally.
+    session_cookie="__session",
+    https_only=bool(os.getenv("K_SERVICE")),
     same_site="lax",
 )
 
