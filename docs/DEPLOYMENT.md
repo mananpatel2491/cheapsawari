@@ -39,15 +39,33 @@ The app is gated by Google sign-in + an admin-managed allowlist, **live in prod 
   that can manage the allowlist at `/admin`. Invited users live in Firestore `allowed_users/{email}`
   (created on first add; no index step).
 
-Authorized JavaScript origins on the OAuth client: `https://cheapsawari-api-p3vdiwk6kq-uc.a.run.app`
-and `https://cheapsawari-api-444653658968.us-central1.run.app` (+ `http://127.0.0.1:8050` for local).
+Authorized JavaScript origins on the OAuth client (all four):
+- `https://cheapsawari.web.app`  ← Firebase Hosting (Slice 12)
+- `https://cheapsawari.firebaseapp.com`
+- `https://cheapsawari-api-444653658968.us-central1.run.app`
+- `https://cheapsawari-api-p3vdiwk6kq-uc.a.run.app`
+
+(+ `http://127.0.0.1:8050` for local dev.)
+
+> ⚠️ **GOTCHA — every serving domain must be added by hand.** cheapsawari uses **Google Identity
+> Services (GIS) directly** (the Slice 6 choice), not the Firebase Auth SDK. With GIS the token is
+> issued from the *page's own origin*, so Google validates that origin against this **Authorized
+> JavaScript origins** list — which is manual. **Any new domain the app is served from (a custom
+> domain, another Hosting site, etc.) WILL break sign-in until you add it here.** This is unlike the
+> TradeFleet sites, which use the Firebase Auth SDK: Firebase brokers OAuth through its own handler
+> domain and auto-authorizes Hosting domains via *Firebase Auth → Authorized domains*, so they never
+> touch the GCP OAuth client. The trade-off is deliberate (single $0 FastAPI service, no Firebase web
+> SDK); the cost is this one manual step per domain. Symptom when forgotten: the "Sign in with Google"
+> button doesn't render / errors, and **no `auth.login` event appears in the logs** (the block is
+> upstream at Google — see `docs/LOGGING.md`).
 
 To re-flip env later without a code change: `gcloud run services update cheapsawari-api
 --region us-central1 --project cheapsawari --update-env-vars "KEY=VALUE,..."`.
 
-> **Current revision:** `cheapsawari-api-00006-xgw` — Slices 6 (Google auth + admin allowlist),
-> 7 (round-trip + date flexibility), and 8 (per-user watch ownership — private per user, admin
-> sees all), live Travelpayouts fares, deployed 2026-06-24.
+> **Current revision:** `cheapsawari-api-00008-vr7` — Slices 6–8 (Google auth + allowlist,
+> round-trip/flex, per-user ownership), 9 (multi-city), 11 (structured logging); served at
+> **`https://cheapsawari.web.app`** via Firebase Hosting (Slice 12) and at the Cloud Run URL.
+> Live Travelpayouts fares. IaC in `terraform/` (Slice 10).
 
 ## Redeploy
 ```bash
