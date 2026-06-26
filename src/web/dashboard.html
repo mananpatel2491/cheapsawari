@@ -156,7 +156,14 @@
   table.legtab th, table.legtab td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
   table.legtab th { color: var(--muted); font-weight: 600; font-size: 12px; }
   table.legtab td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .seclabel { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin: 0 0 8px; }
+  .seclabel { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin: 18px 0 8px; }
+  .logrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .logrow input {
+    background: var(--bg); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 8px 10px; font: inherit;
+  }
+  .logrow input.lp { width: 120px; }
+  .loghint { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
 </style>
 </head>
 <body>
@@ -657,7 +664,17 @@ function openDetails(id) {
     <table class="legtab">
       <thead><tr><th>#</th><th>Route</th><th>Date (± flex)</th><th class="num">Latest price</th><th>Airline</th></tr></thead>
       <tbody>${rows}</tbody>
-    </table>`;
+    </table>
+    <p class="seclabel">Log a price (manual)</p>
+    <div class="logrow">
+      <input id="logPrice" class="lp" type="number" min="0" step="0.01" placeholder="e.g. 900">
+      <input id="logDate" type="date" title="Observed on (optional; defaults to today). Past dates allowed for backfill.">
+      <button type="button" id="logAdd">Add price</button>
+    </div>
+    <p class="loghint">Records a price point in this watch's history (e.g. to backfill a trend or set a
+      reference). Detection compares the latest price to the recent average. Note: automated email
+      alerts fire from the daily check — manual entries update the on-screen badge, not email.</p>
+    <div id="logMsg"></div>`;
   $("modal").dataset.id = id;
   $("modal").hidden = false;
 }
@@ -666,6 +683,37 @@ $("mCloseBtn").addEventListener("click", closeModal);
 $("mEdit").addEventListener("click", () => { const id = $("modal").dataset.id; if (id) startEdit(id); });
 $("modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("modal").hidden) closeModal(); });
+
+// Manual price logging (Slice 19): POST a snapshot to the open watch, then refresh.
+$("modal").addEventListener("click", async (e) => {
+  if (e.target.id !== "logAdd") return;
+  const id = $("modal").dataset.id;
+  const price = Number($("logPrice").value);
+  if (!price || price <= 0) { $("logMsg").innerHTML = `<span class="error">Enter a price above 0.</span>`; return; }
+  const body = { price };
+  const dv = $("logDate").value;
+  if (dv) body.observed_at = dv + "T12:00:00Z"; // noon UTC keeps the calendar date stable
+  e.target.disabled = true;
+  $("logMsg").textContent = "Saving…";
+  try {
+    const r = await fetch(`${API}/watches/${id}/snapshots`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (r.status === 401) { location.href = "/login"; return; }
+    if (!r.ok) {
+      let d = `Could not save (${r.status}).`;
+      try { const j = await r.json(); if (typeof j.detail === "string") d = j.detail; } catch {}
+      $("logMsg").innerHTML = `<span class="error">${d}</span>`;
+      e.target.disabled = false;
+      return;
+    }
+    await load();        // re-pull watches/snapshots/signals; repopulates state.byId
+    openDetails(id);     // re-render the modal with the new history (also clears the form)
+  } catch (err) {
+    $("logMsg").innerHTML = `<span class="error">Failed: ${err.message}</span>`;
+    e.target.disabled = false;
+  }
+});
 
 $("reload").addEventListener("click", load);
 
