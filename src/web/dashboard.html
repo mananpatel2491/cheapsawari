@@ -605,10 +605,16 @@ $("cards").addEventListener("click", async (e) => {
       if (r.status === 401) { location.href = "/login"; return; }
       if (r.ok) {
         const j = await r.json();
-        if (!j.recorded) {
-          $("status").innerHTML = `<div class="empty">No fare available right now${j.reason ? " (" + j.reason + ")" : ""}.</div>`;
-        }
+        // load() clears #status, so set the feedback AFTER it (the earlier ordering
+        // wiped the "no fare" message before the user could see it).
         await load();
+        if (j.recorded) {
+          $("status").innerHTML = `<div class="empty">✓ Latest fare fetched: ${fmt(j.snapshot.price)} ${j.snapshot.currency}.</div>`;
+        } else {
+          $("status").innerHTML = `<div class="empty">No fare available right now${j.reason ? " (" + j.reason + ")" : ""}. ` +
+            `The price source (Travelpayouts) only has cached fares for routes/dates recently searched — ` +
+            `popular routes return data; quiet routes or far-out dates may have none yet.</div>`;
+        }
       } else {
         let d = `Refresh failed (${r.status}).`;
         try { const j = await r.json(); if (typeof j.detail === "string") d = j.detail; } catch {}
