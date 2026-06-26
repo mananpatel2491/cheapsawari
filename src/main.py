@@ -111,8 +111,13 @@ def admin_page(request: Request) -> FileResponse | RedirectResponse:
 
 @app.get("/health", tags=["meta"])
 def health() -> dict:
-    """Liveness probe + the active provider (handy for confirming mock vs amadeus)."""
-    return {"status": "ok", "provider": get_settings().fare_provider}
+    """Liveness probe + the active provider (handy for confirming mock vs amadeus).
+
+    Also exposes the public affiliate ``marker`` (Slice 18) so the dashboard can build
+    Aviasales "book this fare" deep links; null when unset (links still work).
+    """
+    s = get_settings()
+    return {"status": "ok", "provider": s.fare_provider, "marker": s.travelpayouts_marker}
 
 
 # --- Slice 6: auth + admin -------------------------------------------------

@@ -50,6 +50,10 @@ class Settings(BaseModel):
     # Free, affiliate-token gated; returns cached cheapest-price-by-route data.
     travelpayouts_token: str | None = None
     travelpayouts_currency: str = "usd"
+    # Affiliate marker (Slice 18) — the public Travelpayouts/Aviasales affiliate id used
+    # to build "book this fare" deep links. Not a secret (it appears in public URLs);
+    # optional — links still work without it, just without affiliate attribution.
+    travelpayouts_marker: str | None = None
     request_timeout_s: float = 15.0
     watch_store: str = "sqlite"
     sqlite_path: str = "cheapsawari.db"
@@ -107,6 +111,7 @@ def get_settings() -> Settings:
         amadeus_currency=os.getenv("AMADEUS_CURRENCY", "USD"),
         travelpayouts_token=os.getenv("TRAVELPAYOUTS_TOKEN") or None,
         travelpayouts_currency=os.getenv("TRAVELPAYOUTS_CURRENCY", "usd").strip().lower(),
+        travelpayouts_marker=os.getenv("TRAVELPAYOUTS_MARKER") or None,
         request_timeout_s=float(os.getenv("REQUEST_TIMEOUT_S", "15.0")),
         watch_store=os.getenv("WATCH_STORE", "sqlite").strip().lower(),
         sqlite_path=os.getenv("SQLITE_PATH", "cheapsawari.db"),

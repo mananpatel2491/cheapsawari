@@ -62,6 +62,8 @@
   header {
     padding: 20px 24px; border-bottom: 1px solid var(--line);
     display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    /* Keep the menu visible while scrolling (Slice 18). */
+    position: sticky; top: 0; z-index: 20; background: var(--bg);
   }
   header h1 { margin: 0; font-size: 20px; letter-spacing: .5px; }
   header .sub { color: var(--muted); font-size: 13px; }
@@ -231,7 +233,31 @@ const fmt = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 
 
 // Loaded watches keyed by id ({ w, snaps, signal }) so the Details/Edit buttons can act
 // on the full record without re-fetching. id of the watch currently being edited, or null.
-const state = { byId: {}, editingId: null };
+// `marker` is the public Travelpayouts affiliate id (from /health) for booking deep links.
+const state = { byId: {}, editingId: null, marker: null };
+
+// Slice 18 — airline IATA → display name (common carriers; falls back to the code).
+const AIRLINES = {
+  AA: "American", DL: "Delta", UA: "United", WN: "Southwest", B6: "JetBlue",
+  AS: "Alaska", NK: "Spirit", F9: "Frontier", HA: "Hawaiian", G4: "Allegiant",
+  AC: "Air Canada", WS: "WestJet", AM: "Aeroméxico", BA: "British Airways",
+  VS: "Virgin Atlantic", AF: "Air France", KL: "KLM", LH: "Lufthansa", LX: "SWISS",
+  IB: "Iberia", AY: "Finnair", SK: "SAS", TP: "TAP Portugal", EI: "Aer Lingus",
+  EK: "Emirates", QR: "Qatar Airways", EY: "Etihad", TK: "Turkish", SV: "Saudia",
+  SQ: "Singapore", CX: "Cathay Pacific", JL: "Japan Airlines", NH: "ANA",
+  AI: "Air India", QF: "Qantas", NZ: "Air NZ", ET: "Ethiopian", SA: "South African",
+};
+const airlineName = (code) => (code ? (AIRLINES[code] || code) : null);
+
+// Build an Aviasales search deep link (with affiliate marker when configured). Dates are
+// YYYY-MM-DD; Aviasales encodes each as DDMM. A return date makes it a round-trip search.
+function aviasalesUrl(origin, destination, dateISO, returnISO) {
+  const ddmm = (iso) => { const [, m, d] = iso.split("-"); return d + m; };
+  let path = origin + ddmm(dateISO) + destination + (returnISO ? ddmm(returnISO) : "") + "1";
+  let url = "https://www.aviasales.com/search/" + path;
+  if (state.marker) url += "?marker=" + encodeURIComponent(state.marker);
+  return url;
+}
 
 // Mirror of the backend's Watch.resolved_legs: normalize any trip shape into the ordered
 // list of legs the watch tracks — so Details can show every leg (incl. a 6-leg multi-city)
@@ -308,12 +334,25 @@ function tripTag(w) {
   return "";
 }
 
-// Per-leg price breakdown from the latest snapshot (round-trip = 2 legs, multi-city = N).
+// Per-leg breakdown from the latest snapshot, each with its airline and a book-out link
+// (Slice 18). Renders for any shape that has priced legs — incl. a single one-way leg, so
+// the airline is always visible when known. For a round trip the link is one round-trip
+// search; otherwise each leg is a one-way search.
 function legsLine(w, latest) {
-  if (!latest || !latest.legs || latest.legs.length < 2) return "";
-  const segs = latest.legs.map(
-    (l) => `<span>${l.origin}→${l.destination} ${l.date} · ${fmt(l.price)}</span>`
-  ).join("");
+  if (!latest || !latest.legs || !latest.legs.length) return "";
+  const rt = w.trip_type === "round_trip" && latest.legs.length === 2;
+  const segs = latest.legs.map((l, i) => {
+    const air = airlineName(l.carrier);
+    const url = (rt && i === 0)
+      ? aviasalesUrl(l.origin, l.destination, l.date, latest.legs[1].date)
+      : aviasalesUrl(l.origin, l.destination, l.date);
+    // For a round trip, the single book link lives on the outbound leg only.
+    const link = (!rt || i === 0)
+      ? ` · <a href="${url}" target="_blank" rel="noopener noreferrer">book ↗</a>`
+      : "";
+    return `<span>${l.origin}→${l.destination} ${l.date} · ${fmt(l.price)}` +
+      (air ? ` · ${air}` : "") + link + `</span>`;
+  }).join("");
   return `<div class="legs">${segs}</div>`;
 }
 
@@ -357,7 +396,7 @@ async function load() {
   $("status").textContent = "";
   whoami();
   try {
-    jget("/health").then((h) => ($("provider").textContent = h.provider)).catch(() => {});
+    jget("/health").then((h) => { $("provider").textContent = h.provider; state.marker = h.marker || null; }).catch(() => {});
     const watches = await jget(API + "/watches");
     if (!watches.length) {
       $("cards").innerHTML = "";
@@ -573,16 +612,27 @@ function openDetails(id) {
   const legs = watchLegs(w);
   // Latest snapshot's per-leg prices line up with the configured legs in order.
   const priced = latest && latest.legs ? latest.legs : [];
+  const rt = w.trip_type === "round_trip" && priced.length === 2;
   const rows = legs.map((l, i) => {
     const p = priced[i];
     const priceCell = p
       ? fmt(p.price) + (p.date && p.date !== l.date ? ` <span class="meta">@${p.date}</span>` : "")
       : "—";
+    const air = p ? airlineName(p.carrier) : null;
+    // Book link uses the priced (chosen) date; round trip → one round-trip search on row 1.
+    const bookUrl = p
+      ? ((rt && i === 0) ? aviasalesUrl(l.origin, l.destination, p.date, priced[1].date)
+                         : aviasalesUrl(l.origin, l.destination, p.date))
+      : null;
+    const airlineCell = air
+      ? `${air}${bookUrl && (!rt || i === 0) ? ` · <a href="${bookUrl}" target="_blank" rel="noopener noreferrer">book ↗</a>` : ""}`
+      : (bookUrl && (!rt || i === 0) ? `<a href="${bookUrl}" target="_blank" rel="noopener noreferrer">book ↗</a>` : "—");
     return `<tr>
       <td>${i + 1}</td>
       <td>${l.origin} → ${l.destination}</td>
       <td>${l.date}${l.flex_days > 0 ? ` <span class="meta">(+${l.flex_days}d)</span>` : ""}</td>
       <td class="num">${priceCell}</td>
+      <td>${airlineCell}</td>
     </tr>`;
   }).join("");
   const tripName = { one_way: "One-way", round_trip: "Round-trip", multi_city: "Multi-city" }[w.trip_type] || w.trip_type;
@@ -605,7 +655,7 @@ function openDetails(id) {
     </dl>
     <p class="seclabel">Legs (${legs.length})</p>
     <table class="legtab">
-      <thead><tr><th>#</th><th>Route</th><th>Date (± flex)</th><th class="num">Latest price</th></tr></thead>
+      <thead><tr><th>#</th><th>Route</th><th>Date (± flex)</th><th class="num">Latest price</th><th>Airline</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
   $("modal").dataset.id = id;
