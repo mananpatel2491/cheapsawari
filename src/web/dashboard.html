@@ -99,6 +99,8 @@
     grid-column: 1 / -1; display: flex; gap: 18px; flex-wrap: wrap;
     color: var(--muted); font-size: 12.5px;
   }
+  .legs .book { color: var(--muted); }
+  .legs .book a { white-space: nowrap; }
   .mc { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
   .mc-hint { font-size: 12.5px; color: var(--muted); }
   .legrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -266,6 +268,54 @@ function aviasalesUrl(origin, destination, dateISO, returnISO) {
   return url;
 }
 
+// Google Flights natural-language search (neutral; routes you onward to book direct).
+function googleFlightsUrl(origin, destination, dateISO, returnISO) {
+  let q = `Flights from ${origin} to ${destination} on ${dateISO}`;
+  if (returnISO) q += ` returning ${returnISO}`;
+  return "https://www.google.com/travel/flights?q=" + encodeURIComponent(q);
+}
+
+// Operating airline → official site (Slice 20). Homepage/booking entry; deep-linking a
+// specific fare per airline isn't reliable, so this lands on their site to re-search.
+const AIRLINE_SITES = {
+  AA: "https://www.aa.com", DL: "https://www.delta.com", UA: "https://www.united.com",
+  WN: "https://www.southwest.com", B6: "https://www.jetblue.com", AS: "https://www.alaskaair.com",
+  NK: "https://www.spirit.com", F9: "https://www.flyfrontier.com", HA: "https://www.hawaiianairlines.com",
+  G4: "https://www.allegiantair.com", AC: "https://www.aircanada.com", WS: "https://www.westjet.com",
+  AM: "https://www.aeromexico.com", BA: "https://www.britishairways.com", VS: "https://www.virginatlantic.com",
+  AF: "https://www.airfrance.com", KL: "https://www.klm.com", LH: "https://www.lufthansa.com",
+  LX: "https://www.swiss.com", IB: "https://www.iberia.com", AY: "https://www.finnair.com",
+  SK: "https://www.flysas.com", TP: "https://www.flytap.com", EI: "https://www.aerlingus.com",
+  EK: "https://www.emirates.com", QR: "https://www.qatarairways.com", EY: "https://www.etihad.com",
+  TK: "https://www.turkishairlines.com", SV: "https://www.saudia.com", SQ: "https://www.singaporeair.com",
+  CX: "https://www.cathaypacific.com", JL: "https://www.jal.com", NH: "https://www.ana.co.jp/en/us/",
+  AI: "https://www.airindia.com", QF: "https://www.qantas.com", NZ: "https://www.airnewzealand.com",
+  ET: "https://www.ethiopianairlines.com", SA: "https://www.flysaa.com",
+};
+
+// The three booking links for one fare, each with its own explanatory tooltip.
+function bookLinks(origin, destination, dateISO, carrier, returnISO) {
+  const a = (href, txt, title) =>
+    `<a href="${href}" target="_blank" rel="noopener noreferrer" title="${title}">${txt}</a>`;
+  const links = [
+    a(aviasalesUrl(origin, destination, dateISO, returnISO), "Aviasales",
+      "Most accurate match to the price shown (where this fare was found)."),
+    a(googleFlightsUrl(origin, destination, dateISO, returnISO), "Google Flights",
+      "Compare options — the price may differ from what's shown here."),
+  ];
+  const site = AIRLINE_SITES[carrier];
+  if (site) links.push(a(site, airlineName(carrier),
+    "Book directly with the airline — you'll re-enter the trip details on their site."));
+  return links.join(" · ");
+}
+
+// Visible legend explaining the three booking links (shown once in the Details modal).
+const BOOK_LEGEND =
+  `<p class="loghint"><b>Where to book:</b> ` +
+  `<b>Aviasales</b> — most accurate match to the price shown. ` +
+  `<b>Google Flights</b> — compare options; price may change. ` +
+  `<b>Airline</b> — book directly with the airline (you'll re-enter the trip details).</p>`;
+
 // Mirror of the backend's Watch.resolved_legs: normalize any trip shape into the ordered
 // list of legs the watch tracks — so Details can show every leg (incl. a 6-leg multi-city)
 // regardless of whether a snapshot has been recorded yet.
@@ -350,15 +400,12 @@ function legsLine(w, latest) {
   const rt = w.trip_type === "round_trip" && latest.legs.length === 2;
   const segs = latest.legs.map((l, i) => {
     const air = airlineName(l.carrier);
-    const url = (rt && i === 0)
-      ? aviasalesUrl(l.origin, l.destination, l.date, latest.legs[1].date)
-      : aviasalesUrl(l.origin, l.destination, l.date);
-    // For a round trip, the single book link lives on the outbound leg only.
-    const link = (!rt || i === 0)
-      ? ` · <a href="${url}" target="_blank" rel="noopener noreferrer">book ↗</a>`
+    // For a round trip the book links live on the outbound leg as one round-trip search.
+    const links = (!rt || i === 0)
+      ? `<br><span class="book">book: ${bookLinks(l.origin, l.destination, l.date, l.carrier, rt && i === 0 ? latest.legs[1].date : undefined)}</span>`
       : "";
     return `<span>${l.origin}→${l.destination} ${l.date} · ${fmt(l.price)}` +
-      (air ? ` · ${air}` : "") + link + `</span>`;
+      (air ? ` · ${air}` : "") + links + `</span>`;
   }).join("");
   return `<div class="legs">${segs}</div>`;
 }
@@ -626,14 +673,11 @@ function openDetails(id) {
       ? fmt(p.price) + (p.date && p.date !== l.date ? ` <span class="meta">@${p.date}</span>` : "")
       : "—";
     const air = p ? airlineName(p.carrier) : null;
-    // Book link uses the priced (chosen) date; round trip → one round-trip search on row 1.
-    const bookUrl = p
-      ? ((rt && i === 0) ? aviasalesUrl(l.origin, l.destination, p.date, priced[1].date)
-                         : aviasalesUrl(l.origin, l.destination, p.date))
-      : null;
-    const airlineCell = air
-      ? `${air}${bookUrl && (!rt || i === 0) ? ` · <a href="${bookUrl}" target="_blank" rel="noopener noreferrer">book ↗</a>` : ""}`
-      : (bookUrl && (!rt || i === 0) ? `<a href="${bookUrl}" target="_blank" rel="noopener noreferrer">book ↗</a>` : "—");
+    // Three book links per priced leg (round trip → one round-trip search on row 1).
+    const links = p && (!rt || i === 0)
+      ? bookLinks(l.origin, l.destination, p.date, p.carrier, rt && i === 0 ? priced[1].date : undefined)
+      : "";
+    const airlineCell = (air ? air : (links ? "" : "—")) + (air && links ? "<br>" : "") + links;
     return `<tr>
       <td>${i + 1}</td>
       <td>${l.origin} → ${l.destination}</td>
@@ -662,9 +706,10 @@ function openDetails(id) {
     </dl>
     <p class="seclabel">Legs (${legs.length})</p>
     <table class="legtab">
-      <thead><tr><th>#</th><th>Route</th><th>Date (± flex)</th><th class="num">Latest price</th><th>Airline</th></tr></thead>
+      <thead><tr><th>#</th><th>Route</th><th>Date (± flex)</th><th class="num">Latest price</th><th>Book</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
+    ${latest && latest.legs && latest.legs.length ? BOOK_LEGEND : ""}
     <p class="seclabel">Log a price (manual)</p>
     <div class="logrow">
       <input id="logPrice" class="lp" type="number" min="0" step="0.01" placeholder="e.g. 900">
