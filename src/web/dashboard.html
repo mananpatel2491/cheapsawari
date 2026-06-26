@@ -396,6 +396,48 @@ function addLegRow(origin = "", dest = "", date = "", flex = 0) {
   $("legRows").appendChild(row);
 }
 
+// --- Date-picker UX (Slice 17) -----------------------------------------------
+// Local "today" as YYYY-MM-DD (not UTC, so it's correct near midnight).
+function todayISO() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
+// Open the native calendar when the user clicks ANYWHERE on a date field, not just
+// the little icon. showPicker() needs a user gesture (a click qualifies) and may not
+// exist on older browsers — guard both.
+document.addEventListener("click", (e) => {
+  const t = e.target;
+  if (t && t.matches && t.matches('input[type="date"]') && typeof t.showPicker === "function") {
+    try { t.showPicker(); } catch (_) {}
+  }
+});
+
+// Round-trip: the return date can't precede departure, and neither can be in the past.
+// (When editing a pre-existing watch whose dates are already past, keep them valid.)
+function syncSimpleDateFloors() {
+  const today = todayISO();
+  const dep = $("date"), ret = $("returnDate");
+  dep.min = (state.editingId && dep.value && dep.value < today) ? dep.value : today;
+  const floor = dep.value || today;
+  ret.min = (state.editingId && ret.value && ret.value < floor) ? ret.value : floor;
+  if (ret.value && ret.value < ret.min) ret.value = ret.min;
+}
+
+// Multi-city: each leg must be on/after the previous leg (and not in the past).
+function syncLegDateFloors() {
+  const today = todayISO();
+  let prev = today;
+  [...$("legRows").children].forEach((row) => {
+    const inp = row.querySelector(".ldate");
+    const floor = (state.editingId && inp.value && inp.value < prev) ? inp.value : prev;
+    inp.min = floor;
+    if (inp.value && inp.value < floor) inp.value = floor;
+    prev = inp.value || prev;
+  });
+}
+
 // Switch the form between one-way / round-trip / multi-city.
 function syncTripType() {
   const t = $("tripType").value;
@@ -408,13 +450,21 @@ function syncTripType() {
   $("returnDate").required = t === "round_trip";
   // Seed two leg rows the first time multi-city is opened.
   if (t === "multi_city" && $("legRows").children.length === 0) { addLegRow(); addLegRow(); }
+  syncSimpleDateFloors();
+  syncLegDateFloors();
 }
 $("tripType").addEventListener("change", syncTripType);
-$("addLeg").addEventListener("click", () => addLegRow());
+$("date").addEventListener("change", syncSimpleDateFloors);
+$("addLeg").addEventListener("click", () => { addLegRow(); syncLegDateFloors(); });
 $("legRows").addEventListener("click", (e) => {
   if (!e.target.classList.contains("rmLeg")) return;
   if ($("legRows").children.length <= 2) return; // multi-city needs ≥ 2 legs
   e.target.closest(".legrow").remove();
+  syncLegDateFloors();
+});
+// A change to any leg's date re-floors the legs after it.
+$("legRows").addEventListener("change", (e) => {
+  if (e.target.classList.contains("ldate")) syncLegDateFloors();
 });
 
 $("addForm").addEventListener("submit", async (e) => {
@@ -484,6 +534,8 @@ function fillForm(w) {
   $("returnDate").value = w.return_date || "";
   $("returnFlex").value = w.return_flex_days || 0;
   $("alertPct").value = w.alert_threshold_pct != null ? w.alert_threshold_pct : "";
+  syncSimpleDateFloors();
+  syncLegDateFloors();
 }
 
 function startEdit(id) {
@@ -637,6 +689,7 @@ $("cards").addEventListener("click", async (e) => {
   }
 });
 
+syncSimpleDateFloors();
 load();
 </script>
 </body>
