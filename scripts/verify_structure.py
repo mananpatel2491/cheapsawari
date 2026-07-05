@@ -56,6 +56,10 @@ def verify(dry_run=False):
             # Ignore .git directory and the manifest itself
             if ".git" in rel_path.parts or rel_path.name == "Project_Structure.md" or "__pycache__" in rel_path.parts or rel_path.name == ".env" or "bootstrap_prompts" in rel_path.parts or "docs" in rel_path.parts:
                 continue
+            # Spec Kit toolkit payload and its per-feature artifacts are mapped at
+            # directory level in Project_Structure.md, not file-by-file
+            if rel_path.parts[0] in (".specify", ".claude", ".gemini", "specs"):
+                continue
             actual_files.append(str(rel_path.as_posix()))
 
     missing = [f for f in actual_files if str(f) not in logged_files]

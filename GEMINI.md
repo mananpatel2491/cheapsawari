@@ -35,6 +35,11 @@ The 80/20 Surgical Strike Methodology
 - Plan-First: Spend 80% of the session in Plan Mode (read-only analysis) and only 20% in execution
 - Scope: Limit each session to one testable change to prevent "cascade damage" and minimize technical debt
 
+Spec-Driven Feature Workflow (GitHub Spec Kit)
+- Rule: Any new feature beyond a trivial fix MUST run the Spec Kit chain: specify → clarify → plan → tasks → implement (Claude Code: /speckit-specify …; Gemini CLI: /speckit.specify …).
+- Purpose: The chain is the concrete implementation of the 80/20 planning phase — specs, plans, and task lists persist in `specs/NNN-*/` as durable artifacts instead of dying with the session (context-rot prevention at the feature level).
+- Constitution Precedence: `.specify/memory/constitution.md` is a distillation of this document plus PATTERNS.md for the Spec Kit workflow. It never introduces rules of its own; on conflict, GEMINI.md wins. Regenerate the distillation when this document materially changes.
+
 Communication Guidelines
 - Clarity: Always ask clarifying questions before acting on ambiguous prompts
 - Accountability: If you cannot explain why a specific line of code is necessary, do not implement it

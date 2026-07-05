@@ -37,6 +37,17 @@ Use the **Vibe Code / Build mode in Google AI Studio** to generate the frontend.
 ### 3. Deployment
 The app can be hosted for free on the **Google Cloud Starter Tier** via Firebase App Hosting, requiring no credit card for personal-scale use.
 
+## 📐 Spec-Driven Development (GitHub Spec Kit)
+Every feature beyond a trivial fix runs the [Spec Kit](https://github.com/github/spec-kit) chain, producing durable planning artifacts in `specs/NNN-feature/`:
+
+1. **Specify** — requirements & user stories (Claude Code: `/speckit-specify`, Gemini CLI: `/speckit.specify`)
+2. **Clarify** — structured de-risking questions (optional but recommended)
+3. **Plan** — technical implementation plan
+4. **Tasks** — actionable task breakdown
+5. **Implement** — gated execution
+
+This is the concrete implementation of the project's 80/20 planning-first methodology (see `GEMINI.md`). Governing principles live in `.specify/memory/constitution.md` — a distillation of `GEMINI.md` (which always wins on conflict). Prereqs: `uv` + the Specify CLI (`uv tool install specify-cli --from git+https://github.com/github/spec-kit.git`).
+
 ## 📈 Future Expansion
 Because this is built on **React**, it is designed to be extensible. Future iterations could include:
 *   Interactive trip bundling.
