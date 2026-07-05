@@ -48,5 +48,7 @@ provider migration (changelog 2026-06-24). `[X]` = shipped; `[ ]` = genuinely op
 
 - [ ] T013 Optional itinerary-level provider (true through-fares / bookable quotes) —
   only if later needed (Project_Structure.md roadmap "Next (planned)")
-- [ ] T014 Config docstring drift: `src/config.py:22` still describes `fare_provider`
-  as `"mock" | "amadeus"` — update to include `travelpayouts` (doc-only)
+- [X] T014 Config docstring drift: `src/config.py:22` described `fare_provider` as
+  `"mock" | "amadeus"` — now documents `"mock" | "travelpayouts" | "amadeus
+  (decommissioned upstream)"` per the factory (doc-only; fixed 2026-07-05,
+  docs-drift refresh)

@@ -24,10 +24,11 @@ How cheapsawari logs, what it logs, and how to search it in GCP.
 | `auth.logout` | auth | INFO | sign-out | `email` |
 | `auth.allowlist` | auth | INFO | admin adds/removes a user | `action` (add\|remove), `email`, `by` |
 | `watch.create` | watch | INFO | a watch is created | `watch_id`, `owner`, `trip_type`, `route`, `legs` |
+| `watch.update` | watch | INFO | a watch is edited in place (Slice 15) | `watch_id`, `owner`, `by`, `trip_type`, `route`, `legs` |
 | `watch.delete` | watch | INFO | a watch is deleted | `watch_id`, `owner`, `by` |
 | `provider.error` | provider | WARNING | a fare-provider call failed | `op` (refresh\|poll), `watch_id`, `provider`, `detail` |
 | `poll.run` | poll | INFO | once per scheduled/manual poll (the daily heartbeat) | `active_watches`, `polled`, `recorded`, `no_inventory`, `errors`, `skipped_over_cap`, `alerts_fired` |
-| `alert.fired` | poll | INFO | a "bucket reopened" alert was delivered | `watch_id`, `drop_pct`, `price` |
+| `alert.fired` | poll | INFO | a "bucket reopened" alert was delivered via the configured channel (prod: email to the watch owner since 2026-06-26; log/webhook also supported) | `watch_id`, `recipient`, `drop_pct`, `price` |
 | `alert.error` | poll | WARNING | alert delivery failed | `watch_id`, `detail` |
 | `poll.watch_error` | poll | ERROR | detection/store hiccup on one watch (run continues) | `watch_id`, `exception` |
 

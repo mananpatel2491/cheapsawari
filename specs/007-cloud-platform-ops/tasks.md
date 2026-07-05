@@ -55,6 +55,7 @@ As-built record — reconstructed 2026-07-05 from Slices 3b (2026-06-22) and 10/
   GOOGLE_CLIENT_ID, SMTP_PASSWORD) to Secret Manager (`docs/DEPLOYMENT.md:100-101`)
 - [ ] T014 Remote terraform state (GCS backend stanza prepared but commented,
   `terraform/versions.tf:12-16`) — only needed if the project gains a second operator
-- [ ] T015 Refresh `docs/DEPLOYMENT.md`: revision line (00008-vr7 → 00018-9bw era) and
-  `ALERT_CHANNEL` (log → email live since 2026-06-26) — runbook lags the changelog
-  (drift found during this retro conversion)
+- [X] T015 Refresh `docs/DEPLOYMENT.md`: revision line updated 00008-vr7 →
+  `cheapsawari-api-00018-9bw` (Slices 6–20, dashboard at service root + web.app) and
+  `ALERT_CHANNEL` log → email live since 2026-06-26; `docs/LOGGING.md` catalog gained
+  `watch.update` + `alert.fired.recipient` (fixed 2026-07-05, docs-drift refresh)

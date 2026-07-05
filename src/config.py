@@ -19,8 +19,12 @@ class Settings(BaseModel):
     """Resolved runtime settings.
 
     Attributes:
-        fare_provider: Which FareProvider implementation to use ("mock" | "amadeus").
-            Defaults to "mock" so tests and local dev never burn the live API quota.
+        fare_provider: Which FareProvider implementation to use
+            ("mock" | "travelpayouts" | "amadeus (decommissioned upstream)").
+            Defaults to "mock" so tests and local dev never burn the live API quota;
+            prod runs "travelpayouts" (live since 2026-06-24). "amadeus" is retained
+            in the factory for reference only — Amadeus Self-Service was
+            decommissioned 2026-07-17.
         amadeus_client_id: Amadeus Self-Service OAuth2 client id (required for amadeus).
         amadeus_client_secret: Amadeus Self-Service OAuth2 client secret.
         amadeus_base_url: Amadeus API base. Defaults to the test environment; switch to

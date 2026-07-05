@@ -21,8 +21,18 @@ cheapsawari runs on Google Cloud, project **`cheapsawari`**, region **`us-centra
 - `POLL_TOKEN=<secret>` — generated at deploy time; the same value is set on the scheduler
   header. `.deploy.local` is gone; recover any of these env values from
   `gcloud run services describe cheapsawari-api --region us-central1 --format='value(spec.template.spec.containers[0].env)'`.
-- `ALERT_CHANNEL=log` (Slice 4) — alerts go to Cloud Run logs (zero-cost, prod-safe). To
-  deliver outbound, set `ALERT_CHANNEL=webhook` + `ALERT_WEBHOOK_URL=<slack/discord/generic hook>`.
+- `ALERT_CHANNEL=email` (Slice 16) — **LIVE since 2026-06-26** (rev `cheapsawari-api-00015-mv9`):
+  reopened-bucket alerts are emailed to each **watch owner** (`owner_email`), verified via a
+  poll-triggered `alert.fired` in the live logs. SMTP env set on Cloud Run:
+  `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USER`/`SMTP_PASSWORD` (Gmail app
+  password), `ALERT_EMAIL_FROM` — From renders as `cheapsawari (no-reply) <mpatel.mi24@gmail.com>`
+  (free Gmail rewrites unverified custom-domain Froms; a true `noreply@cheapsawari.web.app`
+  sender would need Workspace/a transactional provider). If SMTP is unconfigured the channel
+  degrades to `log`. Alternatives remain: `ALERT_CHANNEL=log` (Slice 4 default, zero-cost) or
+  `ALERT_CHANNEL=webhook` + `ALERT_WEBHOOK_URL=<slack/discord/generic hook>`.
+- Alert sensitivity: `SIGNAL_THRESHOLD_PCT` (default 15) is the global drop threshold, but each
+  watch may override it via its own `alert_threshold_pct` (1–90, set in the dashboard — Slice 16);
+  the poll and `GET .../signal` both apply `watch.alert_threshold_pct or default`.
 
 ### Auth (Slice 6) — LIVE
 The app is gated by Google sign-in + an admin-managed allowlist, **live in prod since
@@ -62,10 +72,13 @@ Authorized JavaScript origins on the OAuth client (all four):
 To re-flip env later without a code change: `gcloud run services update cheapsawari-api
 --region us-central1 --project cheapsawari --update-env-vars "KEY=VALUE,..."`.
 
-> **Current revision:** `cheapsawari-api-00008-vr7` — Slices 6–8 (Google auth + allowlist,
-> round-trip/flex, per-user ownership), 9 (multi-city), 11 (structured logging); served at
+> **Current revision:** `cheapsawari-api-00018-9bw` — Slices 6–20: Google auth + allowlist,
+> round-trip/flex, per-user ownership, multi-city, structured logging (Slice 11), view/edit
+> tracking (15), email alerts + per-watch threshold + themes (16), date-picker UX (17),
+> airline + booking deep links (18), manual price logging (19), three booking links per fare
+> (20). The dashboard SPA is served at the **service root `/`** — reachable at
 > **`https://cheapsawari.web.app`** via Firebase Hosting (Slice 12) and at the Cloud Run URL.
-> Live Travelpayouts fares. IaC in `terraform/` (Slice 10).
+> Live Travelpayouts fares; email alerts live. IaC in `terraform/` (Slice 10).
 
 ## Redeploy
 ```bash
@@ -98,4 +111,5 @@ it into state with `terraform/import.sh` before `plan`/`apply` (see `terraform/R
 Cost gate: still **~$0/mo** — the config describes existing infra and provisions nothing new.
 
 Optional future hardening: move app secrets (`POLL_TOKEN`, `TRAVELPAYOUTS_TOKEN`,
-`SESSION_SECRET`, `GOOGLE_CLIENT_ID`) from Cloud Run env vars into Secret Manager.
+`SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `SMTP_PASSWORD`) from Cloud Run env vars into
+Secret Manager.

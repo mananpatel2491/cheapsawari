@@ -41,6 +41,7 @@ go-live (2026-06-26). `[X]` = shipped; `[ ]` = genuinely open.
 
 - [ ] T011 True custom-domain sender (noreply@cheapsawari.web.app) — requires Google
   Workspace or a transactional provider; deliberately deferred (research Decision 3)
-- [ ] T012 `docs/DEPLOYMENT.md` still documents prod as `ALERT_CHANNEL=log`
-  (`docs/DEPLOYMENT.md:24-25`) — stale since the 2026-06-26 email go-live (doc-only
-  drift; report to Director)
+- [X] T012 `docs/DEPLOYMENT.md` documented prod as `ALERT_CHANNEL=log` — now records
+  `ALERT_CHANNEL=email` LIVE since 2026-06-26 (SMTP_* on Cloud Run, Gmail
+  display-name From, degrade-to-log) + per-watch threshold (doc-only drift; fixed
+  2026-07-05, Director-approved docs-drift refresh)
