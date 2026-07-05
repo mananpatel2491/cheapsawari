@@ -1,0 +1,108 @@
+# As-built REST contract for auth + admin allowlist (src/main.py:125-231).
+openapi: 3.0.3
+info:
+  title: cheapsawari — auth & admin
+  version: as-built (Slices 6, 13, 14)
+paths:
+  /api/v1/auth/config:
+    get:
+      summary: Public login-page config (no secrets)
+      security: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mode: { type: string, enum: [dev, google] }
+                  google_client_id: { type: string, nullable: true }
+  /api/v1/auth/google:
+    post:
+      summary: Verify a Google ID token, check allowlist, open a session
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [credential], properties: { credential: { type: string } } }
+      responses:
+        "200": { description: SessionUser; Set-Cookie __session }
+        "400": { description: missing credential }
+        "401": { description: invalid token (signature/audience/expiry/unverified email) }
+        "403": { description: verified email not on the allowlist }
+  /api/v1/auth/dev:
+    post:
+      summary: Passwordless dev login — HARD 404 unless AUTH_MODE=dev; allowlist still enforced
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [email], properties: { email: { type: string } } }
+      responses:
+        "200": { description: SessionUser; Set-Cookie __session }
+        "400": { description: invalid email }
+        "403": { description: not allowlisted }
+        "404": { description: AUTH_MODE != dev }
+  /api/v1/auth/me:
+    get:
+      summary: The signed-in user
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionUser" }
+        "401": { description: not authenticated or no longer allowed }
+  /api/v1/auth/logout:
+    post:
+      summary: End the session
+      security: []
+      responses: { "204": { description: cookie cleared } }
+  /api/v1/admin/users:
+    get:
+      summary: List the allowlist (admin only; owner implicit, not shown)
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: array of AllowedUser }
+        "401": { description: no session }
+        "403": { description: signed in but not the admin }
+    post:
+      summary: Grant a Google account access (idempotent)
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [email], properties: { email: { type: string } } }
+      responses:
+        "201": { description: AllowedUser }
+        "400": { description: malformed email, or the owner (already has access) }
+        "403": { description: not admin }
+  /api/v1/admin/users/{email}:
+    delete:
+      summary: Revoke access (takes effect on the user's next request)
+      security: [{ sessionCookie: [] }]
+      responses:
+        "204": { description: revoked }
+        "400": { description: the owner cannot be removed }
+        "403": { description: not admin }
+        "404": { description: not on the allowlist }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __session      # ONLY cookie name Firebase Hosting forwards (src/main.py:60-68)
+  schemas:
+    SessionUser:
+      type: object
+      required: [email, is_admin]
+      properties:
+        email: { type: string }
+        is_admin: { type: boolean }
+    AllowedUser:
+      type: object
+      required: [email, added_by, added_at]
+      properties:
+        email: { type: string }
+        added_by: { type: string }
+        added_at: { type: string, format: date-time }

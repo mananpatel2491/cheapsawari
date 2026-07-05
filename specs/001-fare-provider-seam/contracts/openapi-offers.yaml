@@ -1,0 +1,60 @@
+# As-built REST contract for the offers surface (src/main.py:112-120,233-265).
+openapi: 3.0.3
+info:
+  title: cheapsawari — offers & health
+  version: as-built (Slice 1 + Slice 6 auth gate + Slice 18 marker field)
+paths:
+  /health:
+    get:
+      summary: Liveness probe + active provider + public affiliate marker
+      security: []            # public
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok] }
+                  provider: { type: string, description: "mock | travelpayouts | amadeus" }
+                  marker: { type: string, nullable: true, description: "Travelpayouts affiliate marker (public; null when unset)" }
+  /api/v1/offers/cheapest:
+    get:
+      summary: Cheapest current offer for a route+date
+      security: [{ sessionCookie: [] }]     # require_user (src/main.py:237)
+      parameters:
+        - { name: origin, in: query, required: true, schema: { type: string, pattern: "^[A-Za-z]{3}$" } }
+        - { name: destination, in: query, required: true, schema: { type: string, pattern: "^[A-Za-z]{3}$" } }
+        - { name: date, in: query, required: true, schema: { type: string, format: date } }
+        - { name: cabin, in: query, required: false, schema: { type: string, default: ECONOMY } }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Offer" }
+        "400": { description: origin and destination must differ }
+        "401": { description: no/invalid session (require_user) }
+        "404": { description: no offers for route/date (provider returned None) }
+        "422": { description: IATA pattern or date validation failure }
+        "502": { description: ProviderError — upstream failed }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __session       # Firebase-Hosting-compatible cookie (src/main.py:65-71)
+  schemas:
+    Offer:                  # src/models.py:47-72
+      type: object
+      required: [origin, destination, departure_date, price, currency, cabin, provider, observed_at]
+      properties:
+        origin: { type: string }
+        destination: { type: string }
+        departure_date: { type: string, format: date }
+        price: { type: number, minimum: 0 }
+        currency: { type: string }
+        cabin: { type: string }
+        fare_basis: { type: string, nullable: true }
+        carrier: { type: string, nullable: true }
+        provider: { type: string }
+        observed_at: { type: string, format: date-time }

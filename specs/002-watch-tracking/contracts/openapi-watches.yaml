@@ -1,0 +1,88 @@
+# As-built REST contract for the watches surface (src/main.py:282-429).
+# All routes require the __session cookie (require_user); per-watch routes are
+# ownership-scoped and answer 404 (never 403) for another user's watch (spec 005).
+openapi: 3.0.3
+info:
+  title: cheapsawari — watches
+  version: as-built (Slices 2, 7, 9, 15, 16-field)
+paths:
+  /api/v1/watches:
+    post:
+      summary: Register a trip to track (owned by the signed-in user)
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WatchCreate" }
+      responses:
+        "201": { description: Watch created }
+        "400": { description: origin == destination (non-multi-city) }
+        "401": { description: no session }
+        "422": { description: model validation (trip shape, flex bounds, legs) }
+    get:
+      summary: List the caller's watches, newest first (admin sees all)
+      parameters:
+        - { name: active_only, in: query, schema: { type: boolean, default: false } }
+      responses:
+        "200": { description: array of Watch }
+  /api/v1/watches/{watch_id}:
+    get:
+      summary: Fetch one owned watch
+      responses: { "200": { description: Watch }, "404": { description: unknown or not yours } }
+    put:
+      summary: Edit the trip definition in place (identity + history preserved)
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WatchCreate" }
+      responses:
+        "200": { description: updated Watch }
+        "400": { description: same-city }
+        "404": { description: unknown or not yours }
+        "422": { description: validation }
+    delete:
+      summary: Delete the watch and cascade its snapshots
+      responses: { "204": { description: deleted }, "404": { description: unknown or not yours } }
+  /api/v1/watches/{watch_id}/refresh:
+    post:
+      summary: Price the trip now via the active provider and store a snapshot
+      responses:
+        "200":
+          description: RefreshResult — recorded=true + snapshot, or recorded=false + reason "no inventory"
+        "404": { description: unknown or not yours }
+        "502": { description: ProviderError }
+  /api/v1/watches/{watch_id}/snapshots:
+    get:
+      summary: Price history, newest first
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 100, minimum: 1, maximum: 1000 } }
+      responses: { "200": { description: array of PriceSnapshot } }
+    post:
+      summary: Manually record an observed fare (provider='manual') — spec 003
+      responses: { "201": { description: PriceSnapshot } }
+components:
+  schemas:
+    WatchCreate:        # src/models.py:77-163
+      type: object
+      properties:
+        origin: { type: string, nullable: true }
+        destination: { type: string, nullable: true }
+        departure_date: { type: string, format: date, nullable: true }
+        cabin: { type: string, default: ECONOMY }
+        trip_type: { type: string, enum: [one_way, round_trip, multi_city], default: one_way }
+        return_date: { type: string, format: date, nullable: true }
+        depart_flex_days: { type: integer, minimum: 0, maximum: 21, default: 0 }
+        return_flex_days: { type: integer, minimum: 0, maximum: 21, default: 0 }
+        legs:
+          type: array
+          nullable: true
+          minItems: 2
+          maxItems: 6
+          items:
+            type: object
+            required: [origin, destination, date]
+            properties:
+              origin: { type: string }
+              destination: { type: string }
+              date: { type: string, format: date }
+              flex_days: { type: integer, minimum: 0, maximum: 21, default: 0 }
+        alert_threshold_pct: { type: number, nullable: true, minimum: 1, maximum: 90 }

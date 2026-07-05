@@ -1,0 +1,82 @@
+# As-built REST contract for poll + signal + manual snapshots (src/main.py:398-480).
+openapi: 3.0.3
+info:
+  title: cheapsawari — poll, signal, manual snapshots
+  version: as-built (Slices 3a, 4, 16b)
+paths:
+  /api/v1/poll:
+    post:
+      summary: Poll all active watches once (quota-capped); the scheduler's target
+      security: []       # NOT session-gated; optional X-Poll-Token shared secret
+      parameters:
+        - { name: X-Poll-Token, in: header, required: false, schema: { type: string },
+            description: "Required (401 otherwise) when POLL_TOKEN is configured" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [active_watches, polled, recorded, no_inventory, errors, skipped_over_cap]
+                properties:
+                  active_watches: { type: integer }
+                  polled: { type: integer }
+                  recorded: { type: integer }
+                  no_inventory: { type: integer }
+                  errors: { type: integer }
+                  skipped_over_cap: { type: integer }
+                  alerts_fired: { type: integer, default: 0 }
+        "401": { description: invalid or missing X-Poll-Token }
+  /api/v1/watches/{watch_id}/signal:
+    get:
+      summary: On-demand reopen detection over the watch's history (limit 1000)
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [watch_id, detected]
+                properties:
+                  watch_id: { type: string }
+                  detected: { type: boolean }
+                  signal:
+                    type: object
+                    nullable: true
+                    properties:
+                      kind: { type: string, enum: [bucket_reopened] }
+                      current_price: { type: number }
+                      baseline_price: { type: number }
+                      drop_pct: { type: number }
+                      currency: { type: string }
+                      fare_basis: { type: string, nullable: true }
+                      observed_at: { type: string, format: date-time }
+                      window_days: { type: integer }
+                      threshold_pct: { type: number }
+                      origin: { type: string, nullable: true }
+                      destination: { type: string, nullable: true }
+        "404": { description: unknown or not yours }
+  /api/v1/watches/{watch_id}/snapshots:
+    post:
+      summary: Manually record an observed fare (provider='manual'; backfill allowed)
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [price]
+              properties:
+                price: { type: number, minimum: 0 }
+                currency: { type: string, default: USD }
+                cabin: { type: string, nullable: true, description: "defaults to the watch's cabin" }
+                fare_basis: { type: string, nullable: true }
+                carrier: { type: string, nullable: true }
+                observed_at: { type: string, format: date-time, nullable: true, description: "defaults to now; set for backfill" }
+      responses:
+        "201": { description: PriceSnapshot }
+        "404": { description: unknown or not yours }
+components:
+  securitySchemes:
+    sessionCookie: { type: apiKey, in: cookie, name: __session }
