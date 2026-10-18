@@ -1,19 +1,23 @@
-output "run_service_url" {
-  description = "Public URL of the Cloud Run service."
-  value       = data.google_cloud_run_v2_service.api.uri
+output "app_url" {
+  description = "The address to share and to add as an OAuth JavaScript origin."
+  value       = "https://${google_firebase_hosting_site.app.site_id}.web.app"
 }
 
-output "firestore_database" {
-  description = "Firestore database name + location."
-  value       = "${google_firestore_database.default.name} (${google_firestore_database.default.location_id}, ${google_firestore_database.default.type})"
+output "service_url" {
+  description = "Cloud Run's own URL (also add it as an OAuth JavaScript origin)."
+  value       = google_cloud_run_v2_service.app.uri
 }
 
-output "scheduler_job" {
-  description = "Daily poll job + schedule."
-  value       = "${google_cloud_scheduler_job.daily_poll.name} @ '${google_cloud_scheduler_job.daily_poll.schedule}' ${google_cloud_scheduler_job.daily_poll.time_zone}"
+output "image_repo" {
+  value = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app.repository_id}/cheapsawari"
 }
 
-output "enabled_services" {
-  description = "APIs managed by Terraform."
-  value       = sort([for s in google_project_service.enabled : s.service])
+# Set these as GitHub repository *variables* (none are secret).
+output "github_variables" {
+  value = {
+    GCP_PROJECT_ID   = var.project_id
+    GCP_REGION       = var.region
+    GCP_WIF_PROVIDER = "${local.wif_pool_name}/providers/github-oidc"
+    GCP_DEPLOY_SA    = google_service_account.deploy.email
+  }
 }

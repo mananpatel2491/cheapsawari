@@ -13,17 +13,17 @@ from .sqlite_store import SqliteAllowedUserRepository
 
 
 @lru_cache(maxsize=1)
-def _build(store: str, sqlite_path: str, gcp_project: str | None) -> AllowedUserRepository:
+def _build(store: str, sqlite_path: str, gcp_project: str | None, firestore_database: str = "(default)") -> AllowedUserRepository:
     if store == "sqlite":
         return SqliteAllowedUserRepository(sqlite_path)
     if store == "firestore":
         from .firestore_store import FirestoreAllowedUserRepository
 
-        return FirestoreAllowedUserRepository(project=gcp_project)
+        return FirestoreAllowedUserRepository(project=gcp_project, database=firestore_database)
     raise ValueError(f"Unknown WATCH_STORE '{store}' (expected 'sqlite' or 'firestore').")
 
 
 def get_user_repository(settings: Settings | None = None) -> AllowedUserRepository:
     """Return the configured AllowedUserRepository (default: SQLite)."""
     settings = settings or get_settings()
-    return _build(settings.watch_store, settings.sqlite_path, settings.gcp_project)
+    return _build(settings.watch_store, settings.sqlite_path, settings.gcp_project, settings.firestore_database)

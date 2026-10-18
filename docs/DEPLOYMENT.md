@@ -1,6 +1,12 @@
 # Deployment (Slice 3b — cloud)
 
-cheapsawari runs on Google Cloud, project **`cheapsawari`**, region **`us-central1`**.
+cheapsawari runs on Google Cloud, region **`us-central1`**.
+
+> **Moving (spec 008, 2026-10):** from its own project `cheapsawari` into the shared project
+> **`mananutils`**: named Firestore database `cheapsawari`, Hosting site `cheapsawari-mananutils`,
+> secrets in Secret Manager, the whole service in Terraform, and deploys from GitHub Actions on `v*`
+> tags. Runbook: [`terraform/README.md`](../terraform/README.md). The sections below describe the
+> old project until the move is verified.
 
 ## Live resources
 

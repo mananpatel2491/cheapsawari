@@ -26,8 +26,8 @@ def _as_utc(value) -> datetime:
 
 
 class FirestoreAllowedUserRepository(AllowedUserRepository):
-    def __init__(self, project: str | None = None) -> None:
-        self._db = firestore.Client(project=project) if project else firestore.Client()
+    def __init__(self, project: str | None = None, database: str = "(default)") -> None:
+        self._db = firestore.Client(project=project, database=database)
 
     def _to_user(self, doc) -> AllowedUser:
         d = doc.to_dict()

@@ -1,12 +1,19 @@
 {
   "hosting": {
-    "site": "cheapsawari",
+    "site": "cheapsawari-mananutils",
     "public": "public",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
     "rewrites": [
       {
         "source": "**",
-        "run": { "serviceId": "cheapsawari-api", "region": "us-central1" }
+        "run": {
+          "serviceId": "cheapsawari-api",
+          "region": "us-central1"
+        }
       }
     ]
   }
