@@ -2,11 +2,11 @@
 
 cheapsawari runs on Google Cloud, region **`us-central1`**.
 
-> **Moving (spec 008, 2026-10):** from its own project `cheapsawari` into the shared project
+> **Live on `mananutils` since 2026-10-18 (spec 008, deployed as v0.21.0):** moved from its own project `cheapsawari` into the shared project
 > **`mananutils`**: named Firestore database `cheapsawari`, Hosting site `cheapsawari-mananutils`,
 > secrets in Secret Manager, the whole service in Terraform, and deploys from GitHub Actions on `v*`
-> tags. Runbook: [`terraform/README.md`](../terraform/README.md). The sections below describe the
-> old project until the move is verified.
+> tags. URL: **`https://cheapsawari-mananutils.web.app`**. Runbook: [`terraform/README.md`](../terraform/README.md).
+> The sections below still describe the old project's setup and are kept for history until it is deleted.
 
 ## Live resources
 

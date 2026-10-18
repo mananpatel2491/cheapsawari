@@ -5,6 +5,6 @@
 - [X] T3 `.github/workflows/deploy.yml` (tag → import check → build/push → deploy → `/health`)
 - [X] T4 Docs: terraform/README (runbook), DEPLOYMENT.md note, Project_Structure changelog; firebase.json/.firebaserc → mananutils
 - [X] T5 Bruno gate (local, SQLite + mock): 97 requests, 242/242 assertions pass
-- [ ] T6 Director: secrets bootstrap + copy values; OAuth client; full `terraform apply`
-- [ ] T7 Director: data export/import; GitHub variables; first `v*` tag deploy
+- [X] T6 Director: secrets bootstrap + copy values; OAuth client; full `terraform apply`
+- [X] T7 Director: data export/import; GitHub variables; first `v*` tag deploy (v0.21.0, all steps green)
 - [ ] T8 Verify success criteria; pause old scheduler; delete project `cheapsawari`
