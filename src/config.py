@@ -62,6 +62,9 @@ class Settings(BaseModel):
     watch_store: str = "sqlite"
     sqlite_path: str = "cheapsawari.db"
     gcp_project: str | None = None
+    # Firestore database id. "(default)" in the old single-app project; "cheapsawari" (a named
+    # database) in the shared mananutils project, where (default) belongs to another app.
+    firestore_database: str = "(default)"
     poll_max_per_run: int = 60
     poll_token: str | None = None
     # --- Slice 4: signal detection + alerts ---
@@ -121,6 +124,7 @@ def get_settings() -> Settings:
         sqlite_path=os.getenv("SQLITE_PATH", "cheapsawari.db"),
         # Cloud Run sets GOOGLE_CLOUD_PROJECT; locally falls back to GCP_PROJECT or ADC inference.
         gcp_project=os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("GCP_PROJECT") or None,
+        firestore_database=os.getenv("FIRESTORE_DATABASE") or "(default)",
         poll_max_per_run=int(os.getenv("POLL_MAX_PER_RUN", "60")),
         poll_token=os.getenv("POLL_TOKEN") or None,
         alert_channel=os.getenv("ALERT_CHANNEL", "log").strip().lower(),

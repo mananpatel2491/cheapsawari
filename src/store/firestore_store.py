@@ -47,9 +47,9 @@ def _as_utc(value) -> datetime:
 
 
 class FirestoreWatchRepository(WatchRepository):
-    def __init__(self, project: str | None = None) -> None:
+    def __init__(self, project: str | None = None, database: str = "(default)") -> None:
         # project=None lets the client infer from ADC / the Cloud Run metadata server.
-        self._db = firestore.Client(project=project) if project else firestore.Client()
+        self._db = firestore.Client(project=project, database=database)
 
     # --- doc -> model -------------------------------------------------------
     @staticmethod

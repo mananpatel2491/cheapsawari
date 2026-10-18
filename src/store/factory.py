@@ -13,18 +13,18 @@ from .sqlite_store import SqliteWatchRepository
 
 
 @lru_cache(maxsize=1)
-def _build(store: str, sqlite_path: str, gcp_project: str | None) -> WatchRepository:
+def _build(store: str, sqlite_path: str, gcp_project: str | None, firestore_database: str = "(default)") -> WatchRepository:
     if store == "sqlite":
         return SqliteWatchRepository(sqlite_path)
     if store == "firestore":
         # Imported lazily so local/sqlite runs don't require the Firestore client.
         from .firestore_store import FirestoreWatchRepository
 
-        return FirestoreWatchRepository(project=gcp_project)
+        return FirestoreWatchRepository(project=gcp_project, database=firestore_database)
     raise ValueError(f"Unknown WATCH_STORE '{store}' (expected 'sqlite' or 'firestore').")
 
 
 def get_repository(settings: Settings | None = None) -> WatchRepository:
     """Return the configured WatchRepository (default: SQLite)."""
     settings = settings or get_settings()
-    return _build(settings.watch_store, settings.sqlite_path, settings.gcp_project)
+    return _build(settings.watch_store, settings.sqlite_path, settings.gcp_project, settings.firestore_database)

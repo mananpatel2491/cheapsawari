@@ -1,0 +1,57 @@
+name: Deploy
+
+# A version tag (v1.2.3) deploys. Credentials come from the shared Workload Identity pool in
+# mananutils (mananutils-platform): GitHub's OIDC token is exchanged for a short-lived GCP token.
+# No keys are stored anywhere. Terraform owns the service's env and secrets; this only swaps the image.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  SERVICE: cheapsawari-api
+  REGION: ${{ vars.GCP_REGION }}
+  IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/cheapsawari/cheapsawari
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: App must import and answer /health before deploying
+        run: |
+          pip install -q -r requirements.txt httpx
+          python -c "from fastapi.testclient import TestClient; import src.main as m; r = TestClient(m.app).get('/health'); assert r.status_code == 200, r.text; print(r.json())"
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+      - name: Build and push
+        run: |
+          docker build -t "${IMAGE}:${GITHUB_REF_NAME}" .
+          docker push "${IMAGE}:${GITHUB_REF_NAME}"
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${SERVICE}" \
+            --image "${IMAGE}:${GITHUB_REF_NAME}" \
+            --region "${REGION}" \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --quiet
+      - name: Smoke check
+        run: |
+          URL=$(gcloud run services describe "${SERVICE}" --region "${REGION}" \
+            --project "${{ vars.GCP_PROJECT_ID }}" --format 'value(status.url)')
+          curl -fsS "${URL}/health"
+          echo "Deployed ${GITHUB_REF_NAME} to ${URL}"
